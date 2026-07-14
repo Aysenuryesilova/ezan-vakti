@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.ezan_vakti"
+    namespace = "com.aysenuryesilova.ezanvakti"
     compileSdk = 36
 
     compileOptions {
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.ezan_vakti"
+        applicationId = "com.aysenuryesilova.ezanvakti"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = 1
