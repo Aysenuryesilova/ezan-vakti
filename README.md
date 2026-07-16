@@ -18,7 +18,7 @@ Whether you're at home, traveling, or simply need a quick reminder for the next 
 - Accurate prayer times based on your selected city and district
 - Real-time countdown to the next prayer
 - Sunrise time included for complete daily planning
-- Support for multiple cities (Muş, Balıkesir, Malatya, Sivas) with custom city addition. Because they are my live cities.
+- Support for multiple cities (Muş, Balıkesir, Malatya, Sivas) with custom city addition.
 
 ### 🌸 **Beautiful & Intuitive UI**
 - Floral, pastel-themed design with animated flower backgrounds
@@ -77,11 +77,25 @@ Whether you're at home, traveling, or simply need a quick reminder for the next 
 
 ---
 
+## 🚧 **Development Status & Known Challenges**
+
+As this project is in an active development phase, I am committed to transparency regarding the technical challenges encountered:
+
+- **Geolocated Automation:** Automatic GPS-based location detection is currently being tested for stability.
+- **Background Notifications:** Refining the logic for background notification triggers across different Android API versions is an ongoing task.
+- **Asset Optimization:** The high-resolution floral UI assets are being optimized to ensure a smooth performance and lower memory usage.
+- **API Synchronization:** Efforts are underway to implement a robust local caching mechanism to address occasional latencies with the AlAdhan service.
+
+*Note: These issues are currently being addressed and are not yet fully resolved.*
+
+---
+
 ## 📸 **Screenshots**
 
 | Home Screen | Prayer Times | Surah Detail |
 |-------------|--------------|--------------|
-| *(Add your screenshot here)* | *(Add your screenshot here)* | *(Add your screenshot here)* |
+| *<img width="1080" height="1920" alt="Adsız tasarım (1)" src="https://github.com/user-attachments/assets/5fc24ac7-5837-4c54-94e1-cdf1cbb4f8e8" />
+* | *<img width="1080" height="1920" alt="Adsız tasarım (2)" src="https://github.com/user-attachments/assets/b7748704-1992-4f1f-b7d4-d475a89e8323" />* *<img width="1080" height="1920" alt="Adsız tasarım (3)" src="https://github.com/user-attachments/assets/9d40509d-d18f-46a4-a3fc-444d0760f2ca" />* |
 
 ---
 
@@ -98,5 +112,5 @@ Whether you're at home, traveling, or simply need a quick reminder for the next 
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/ezan-vakti.git
+git clone [https://github.com/Aysenuryesilova/ezan-vakti.git](https://github.com/Aysenuryesilova/ezan-vakti.git)
 cd ezan-vakti
