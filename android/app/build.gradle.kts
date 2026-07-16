@@ -26,9 +26,23 @@ android {
         versionName = "1.0"
     }
 
+    // İmzalandırma ayarları buraya!
+    signingConfigs {
+        create("release") {
+            keyAlias = "upload"
+            keyPassword = "0649.44a58"
+            storeFile = file("upload-keystore.jks")
+            storePassword = "0649.44a58"
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+            // Kod küçültmeyi (minify) ve kaynak küçültmeyi (shrink) aktif ediyoruz
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

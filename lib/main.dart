@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:ezan_vakti/main.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -12,35 +10,96 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:timezone/timezone.dart' as tz; // 🔥 YENİ
+import 'package:timezone/data/latest.dart' as tz_data; // 🔥 YENİ
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
+// ==================== ANA GİRİŞ NOKTASI ====================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('tr_TR', null);
+  tz_data.initializeTimeZones();
 
   if (!kIsWeb) {
-    if (await Permission.notification.isDenied) {
-      await Permission.notification.request();
+    try {
+      // 🔥 DÜZELTİLDİ - permanentlyDenied durumu kontrol ediliyor
+      final status = await Permission.notification.status;
+      if (status.isDenied) {
+        final result = await Permission.notification.request();
+        debugPrint("📢 Bildirim izni sonucu: $result");
+      } else if (status.isPermanentlyDenied) {
+        // Kullanıcı kalıcı olarak reddetmiş, ayarlara yönlendir
+        debugPrint("📢 Bildirim izni kalıcı olarak reddedilmiş!");
+        // Ana sayfada dialog gösterilecek
+      }
+
+      final isGranted = await Permission.notification.isGranted;
+      debugPrint("📢 Bildirim izni verildi mi? $isGranted");
+
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const InitializationSettings initializationSettings =
+          InitializationSettings(android: initializationSettingsAndroid);
+
+      await flutterLocalNotificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          debugPrint("📱 Bildirime tıklandı!");
+        },
+      );
+
+      final androidImplementation =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+      if (androidImplementation != null) {
+        // Kanal 1: Normal bildirimler
+        const AndroidNotificationChannel channel1 = AndroidNotificationChannel(
+          'namaz_vakitleri',
+          'Namaz Vakitleri',
+          description: 'Namaz vakitleri ve hatırlatıcı bildirimleri',
+          importance: Importance.high,
+        );
+        await androidImplementation.createNotificationChannel(channel1);
+
+        // Kanal 2: Sabit bildirim çubuğu
+        const AndroidNotificationChannel channel2 = AndroidNotificationChannel(
+          'namaz_vakitleri_sabit',
+          'Sabit Namaz Vakti',
+          description: 'Namaz vaktine kalan süreyi gösterir',
+          importance: Importance.low,
+        );
+        await androidImplementation.createNotificationChannel(channel2);
+
+        debugPrint("✅ Bildirim kanalları oluşturuldu!");
+      }
+
+      // Test bildirimi (sadece izin verilmişse gönder)
+      if (isGranted) {
+        const AndroidNotificationDetails testDetails =
+            AndroidNotificationDetails(
+          'namaz_vakitleri',
+          'Namaz Vakitleri',
+          importance: Importance.high,
+          priority: Priority.high,
+        );
+        const NotificationDetails testPlatformDetails = NotificationDetails(
+          android: testDetails,
+        );
+        await flutterLocalNotificationsPlugin.show(
+          0,
+          "🌸 Ezan Vakti Test",
+          "Bildirim sistemi çalışıyor! ✅",
+          testPlatformDetails,
+        );
+        debugPrint("✅ Test bildirimi gönderildi!");
+      }
+    } catch (e) {
+      debugPrint("❌ Başlangıç bildirim hatası: $e");
     }
-
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'namaz_vakitleri',
-      'Namaz Vakitleri',
-      description: 'Namaz vakitleri ve hatırlatıcı bildirimleri',
-      importance: Importance.high,
-    );
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
   }
 
   runApp(const MyApp());
@@ -101,33 +160,15 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.local_florist, size: 100, color: Color(0xFFB5627A)),
-              SizedBox(height: 40),
               Text(
-                "🌸 HOŞ GELDİN NEBAHAT 🌸",
+                "🌸 HOŞ GELDİNİZ 🌸",
                 style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFFB5627A),
                   letterSpacing: 2,
-                  shadows: [
-                    Shadow(
-                      blurRadius: 10,
-                      color: Colors.white,
-                      offset: Offset(0, 0),
-                    ),
-                  ],
                 ),
                 textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 20),
-              Text(
-                "🌷 Ezan Vakti Uygulaması",
-                style: TextStyle(
-                  fontSize: 20,
-                  color: Color(0xFF4A2E3B),
-                  fontWeight: FontWeight.w500,
-                ),
               ),
               SizedBox(height: 50),
               CircularProgressIndicator(color: Color(0xFFB5627A)),
@@ -148,60 +189,191 @@ Future<void> showNotification(
 }) async {
   if (kIsWeb) return;
 
-  AndroidNotificationDetails androidPlatformChannelSpecifics =
-      AndroidNotificationDetails(
-    'namaz_vakitleri',
-    'Namaz Vakitleri',
-    importance: Importance.max,
-    priority: Priority.high,
-    playSound: sesli,
-    sound: sound != null && sound != "default" && sound != "silent"
-        ? RawResourceAndroidNotificationSound(sound)
-        : null,
-    enableVibration: true,
-    vibrationPattern: Int64List.fromList([0, 500, 1000, 500]),
+  try {
+    AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'namaz_vakitleri',
+      'Namaz Vakitleri',
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: sesli,
+      fullScreenIntent: true,
+      sound: sound != null && sound != "default" && sound != "silent"
+          ? RawResourceAndroidNotificationSound(sound)
+          : null,
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 500, 1000, 500]),
+    );
+
+    final NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      body,
+      platformChannelSpecifics,
+    );
+    debugPrint("✅ Bildirim gönderildi: $title");
+  } catch (e) {
+    debugPrint("❌ Bildirim hatası: $e");
+  }
+}
+
+// ignore: unused_element
+Future<void> _ensureSabitChannelReady() async {
+  if (kIsWeb) return;
+
+  final androidImplementation =
+      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+  if (androidImplementation == null) return;
+
+  final izinliMi = await androidImplementation.areNotificationsEnabled();
+  if (izinliMi != true) {
+    await androidImplementation.requestNotificationsPermission();
+  }
+
+  const AndroidNotificationChannel channelSabit = AndroidNotificationChannel(
+    'namaz_vakitleri_sabit',
+    'Sabit Namaz Vakti',
+    description: 'Namaz vaktine kalan süreyi gösterir',
+    importance: Importance.low,
+    playSound: false,
+    enableVibration: false,
+    showBadge: false,
   );
-  NotificationDetails platformChannelSpecifics = NotificationDetails(
-    android: androidPlatformChannelSpecifics,
-  );
-  await flutterLocalNotificationsPlugin.show(
-    DateTime.now().millisecondsSinceEpoch.remainder(100000),
-    title,
-    body,
-    platformChannelSpecifics,
-  );
+  await androidImplementation.createNotificationChannel(channelSabit);
 }
 
 Future<void> updateNotification(String remainingTime, String nextPrayer) async {
   if (kIsWeb) return;
 
-  const AndroidNotificationDetails androidPlatformChannelSpecifics =
-      AndroidNotificationDetails(
-    'namaz_vakitleri_sabit',
-    'Sabit Namaz Vakti',
-    channelDescription: 'Namaz vaktine kalan süreyi gösterir',
-    importance: Importance.low,
-    priority: Priority.low,
-    ongoing: true,
-    playSound: false,
-    enableVibration: false,
-    onlyAlertOnce: true,
-    showWhen: false,
-  );
-  const NotificationDetails platformChannelSpecifics = NotificationDetails(
-    android: androidPlatformChannelSpecifics,
-  );
+  try {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'namaz_vakitleri_sabit',
+      'Sabit Namaz Vakti',
+      importance: Importance.low,
+      priority: Priority.low,
+      ongoing: true,
+      autoCancel: false,
+      playSound: false,
+      enableVibration: false,
+      onlyAlertOnce: true,
+      showWhen: false,
+    );
 
-  await flutterLocalNotificationsPlugin.show(
-    999,
-    "⏰ Namaz Vaktine Kalan Süre",
-    "$nextPrayer namazına $remainingTime kaldı",
-    platformChannelSpecifics,
-  );
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      999,
+      "⏰ Namaz Vaktine Kalan Süre",
+      "$nextPrayer namazına $remainingTime kaldı",
+      platformChannelSpecifics,
+    );
+    debugPrint("✅ Sabit bildirim güncellendi: $remainingTime");
+  } catch (e) {
+    debugPrint("❌ Sabit bildirim hatası: $e");
+  }
 }
 
 Future<void> cancelNotification() async {
-  await flutterLocalNotificationsPlugin.cancel(999);
+  try {
+    await flutterLocalNotificationsPlugin.cancel(999);
+    debugPrint("✅ Sabit bildirim kapatıldı");
+  } catch (e) {
+    debugPrint("❌ Bildirim kapatma hatası: $e");
+  }
+}
+
+// ==================== 🔥 YENİ: ZAMANLANMIŞ BİLDİRİMLER ====================
+
+/// Tüm zamanlanmış bildirimleri temizle
+Future<void> cancelAllScheduledNotifications() async {
+  await flutterLocalNotificationsPlugin.cancelAll();
+  debugPrint("✅ Tüm zamanlanmış bildirimler temizlendi");
+}
+
+/// Namaz vakitleri için zamanlanmış bildirimleri kur
+Future<void> schedulePrayerNotifications(Map<String, String> vakitler) async {
+  if (kIsWeb) return;
+
+  // Eski bildirimleri temizle
+  await cancelAllScheduledNotifications();
+
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+
+  // Her vakti zamanla
+  final vakitList = [
+    {"ad": "İmsak", "zaman": vakitler["İmsak"]!},
+    {"ad": "Güneş", "zaman": vakitler["Güneş"]!},
+    {"ad": "Öğle", "zaman": vakitler["Öğle"]!},
+    {"ad": "İkindi", "zaman": vakitler["İkindi"]!},
+    {"ad": "Akşam", "zaman": vakitler["Akşam"]!},
+    {"ad": "Yatsı", "zaman": vakitler["Yatsı"]!},
+  ];
+
+  for (var vakit in vakitList) {
+    if (vakit["zaman"] == "--:--") continue;
+
+    final zamanParcalari = vakit["zaman"]!.split(":");
+    final saat = int.parse(zamanParcalari[0]);
+    final dakika = int.parse(zamanParcalari[1]);
+
+    // Bugünün tarihi ile birleştir
+    DateTime vakitZamani =
+        DateTime(today.year, today.month, today.day, saat, dakika);
+
+    // Vakit geçtiyse ertesi güne ata
+    if (vakitZamani.isBefore(now)) {
+      vakitZamani = vakitZamani.add(const Duration(days: 1));
+    }
+
+    await _scheduleSingleNotification(
+        vakitZamani, vakit["ad"]!, vakit["zaman"]!);
+  }
+
+  debugPrint("✅ Tüm namaz vakitleri zamanlandı!");
+}
+
+/// Tek bir bildirim zamanla
+Future<void> _scheduleSingleNotification(
+    DateTime time, String vakitAdi, String saatStr) async {
+  // Android bildirim detayları
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'namaz_vakitleri',
+    'Namaz Vakitleri',
+    channelDescription: 'Namaz vakitleri hatırlatıcıları',
+    importance: Importance.high,
+    priority: Priority.high,
+    playSound: true,
+    enableVibration: true,
+  );
+
+  const NotificationDetails details = NotificationDetails(
+    android: androidDetails,
+  );
+
+  // Zamanlanmış bildirimi kur
+  await flutterLocalNotificationsPlugin.zonedSchedule(
+    vakitAdi.hashCode,
+    "🕌 $vakitAdi Vakti Geldi 🌸",
+    "$vakitAdi ezanı okunuyor. ($saatStr)\nNamazınızı kılmayı unutmayın.",
+    tz.TZDateTime.from(time, tz.local),
+    details,
+    uiLocalNotificationDateInterpretation:
+        UILocalNotificationDateInterpretation.absoluteTime,
+    matchDateTimeComponents: DateTimeComponents.time,
+    androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+  );
+
+  debugPrint(
+      "✅ Bildirim zamanlandı: $vakitAdi - ${DateFormat('HH:mm').format(time)}");
 }
 
 // ==================== EZAN VAKTİ APP ====================
@@ -214,11 +386,24 @@ class EzanVaktiApp extends StatefulWidget {
 
 class _EzanVaktiAppState extends State<EzanVaktiApp> {
   bool isDarkMode = false;
+  bool _bildirimIzniKaliciRed = false;
 
   @override
   void initState() {
     super.initState();
     _temaAyariYukle();
+    _izniKontrolEt();
+  }
+
+  Future<void> _izniKontrolEt() async {
+    if (!kIsWeb) {
+      final status = await Permission.notification.status;
+      if (status.isPermanentlyDenied) {
+        setState(() {
+          _bildirimIzniKaliciRed = true;
+        });
+      }
+    }
   }
 
   Future<void> _temaAyariYukle() async {
@@ -291,6 +476,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('gece_modu', val);
         },
+        bildirimIzniKaliciRed: _bildirimIzniKaliciRed,
       ),
     );
   }
@@ -331,9 +517,9 @@ class FlowerBackground extends StatelessWidget {
         children: [
           Positioned.fill(
             child: Opacity(
-              opacity: isDark ? 0.04 : 0.08,
+              opacity: isDark ? 0.06 : 0.12,
               child: Image.asset(
-                'assets/images/app_icon.png',
+                'assets/images/papatya.png',
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container();
@@ -350,116 +536,234 @@ class FlowerBackground extends StatelessWidget {
 
 // ==================== ÖZEL GÜNLER VE DOĞUM GÜNLERİ ====================
 class OzelGunler {
-  // 6 ÖZEL GÜN
   static final List<Map<String, dynamic>> _ozelGunler = [
     {
       'ad': '🌸 Öğretmenler Günü',
-      'tarih': '2025-11-24',
+      'tarih': '2026-11-24',
       'aciklama':
           'Başöğretmen Mustafa Kemal Atatürk\'e ve tüm öğretmenlere saygı ve şükran günü.',
+      'bildirim': true,
     },
     {
       'ad': '🌷 Anneler Günü',
-      'tarih': '2025-05-11',
+      'tarih': '2026-05-11',
       'aciklama':
           'Annelerimize sevgi, saygı ve şükran duygularımızı ifade ettiğimiz özel gün.',
+      'bildirim': true,
     },
     {
       'ad': '🍒 Malatyalılar Günü',
-      'tarih': '2025-05-15',
+      'tarih': '2026-05-15',
       'aciklama':
           'Malatya\'nın düşman işgalinden kurtuluşu, gurur ve dayanışma günü.',
+      'bildirim': true,
     },
     {
       'ad': '👩‍💻 Kadın Yazılımcılar Günü',
-      'tarih': '2025-10-13',
+      'tarih': '2026-10-13',
       'aciklama':
           'Kadın yazılımcıların teknoloji dünyasındaki başarılarını kutladığımız özel gün.',
+      'bildirim': true,
     },
     {
       'ad': '🎓 Akademisyenler Günü',
-      'tarih': '2025-05-19',
+      'tarih': '2026-05-19',
       'aciklama':
           'Gençlik ve Spor Bayramı, Atatürk\'ü Anma, tüm akademisyenlerin günü.',
+      'bildirim': true,
     },
     {
       'ad': '💪 Fizyoterapistler Günü',
-      'tarih': '2025-09-08',
+      'tarih': '2026-09-08',
       'aciklama':
           'Fizyoterapistlerin sağlık alanındaki önemli katkılarının kutlandığı gün.',
+      'bildirim': true,
     },
   ];
 
-  // 6 DOĞUM GÜNÜ
-  static final List<Map<String, dynamic>> _dogumGunleri = [
+  static final List<Map<String, dynamic>> _diniGunler = [
     {
-      'ad': '🌸 BEYZA\'NIN DOĞUM GÜNÜ',
-      'tarih': '2025-12-15',
-      'aciklama': 'Sevgili Beyza\'nın doğum günü kutlu olsun! 🎂',
+      'ad': '🕌 Miraç Kandili',
+      'tarih': '2026-01-15',
+      'aciklama': 'Hz. Muhammed (s.a.v.)\'in göğe yükseldiği gece.',
+      'bildirim': false
     },
     {
-      'ad': '🌷 AYŞENUR\'UN DOĞUM GÜNÜ',
-      'tarih': '2025-08-18',
-      'aciklama': 'Sevgili Ayşenur\'un doğum günü kutlu olsun! 🎂',
+      'ad': '🕌 Berat Kandili',
+      'tarih': '2026-02-02',
+      'aciklama': 'Günahların affedildiği, rahmet kapılarının açıldığı gece.',
+      'bildirim': false
     },
     {
-      'ad': '🌺 ESMANUR\'UN DOĞUM GÜNÜ',
-      'tarih': '2025-04-13',
-      'aciklama': 'Sevgili Esmanur\'un doğum günü kutlu olsun! 🎂',
+      'ad': '🕌 Ramazan Başlangıcı',
+      'tarih': '2026-02-19',
+      'aciklama': 'Oruç ibadetinin başladığı mübarek ay.',
+      'bildirim': false
     },
     {
-      'ad': '🌼 SENANUR\'UN DOĞUM GÜNÜ',
-      'tarih': '2025-06-22',
-      'aciklama': 'Sevgili Senanur\'un doğum günü kutlu olsun! 🎂',
+      'ad': '🕌 Kadir Gecesi',
+      'tarih': '2026-03-16',
+      'aciklama': 'Kur\'an\'ın indirildiği, bin aydan hayırlı gece.',
+      'bildirim': false
     },
     {
-      'ad': '🌹 ANNE\'NİN DOĞUM GÜNÜ',
-      'tarih': '2025-05-11',
-      'aciklama': 'Canım Annem\'in doğum günü kutlu olsun! 🌸',
-    },
-    {
-      'ad': '🌻 SÜMEYRA\'NIN DOĞUM GÜNÜ HAFTASI',
-      'tarih': '2025-10-01',
+      'ad': '🕌 Ramazan Bayramı',
+      'tarih': '2026-03-20',
       'aciklama':
-          'Sevgili Sümeyra\'nın doğum günü haftası kutlu olsun! 🎂 (1-7 Ekim)',
-      'hafta': true,
+          'Ramazan ayının sonunda oruç ibadetinin tamamlandığı, şükür ve kardeşlik bayramı.',
+      'bildirim': false
+    },
+    {
+      'ad': '🕌 Kurban Bayramı',
+      'tarih': '2026-05-27',
+      'aciklama': 'Hac ibadetinin sembolü, fedakarlık ve paylaşma bayramı.',
+      'bildirim': false
+    },
+    {
+      'ad': '🕌 Hicri Yılbaşı',
+      'tarih': '2026-06-16',
+      'aciklama': 'Hicri takvimin başlangıcı, yeni bir yıl.',
+      'bildirim': false
+    },
+    {
+      'ad': '🕌 Aşure Günü',
+      'tarih': '2026-06-25',
+      'aciklama': 'Birçok önemli olayın yaşandığı, paylaşma ve bereket günü.',
+      'bildirim': false
+    },
+    {
+      'ad': '🕌 Mevlid Kandili',
+      'tarih': '2026-08-24',
+      'aciklama': 'Hz. Muhammed (s.a.v.)\'in doğduğu mübarek gece.',
+      'bildirim': false
+    },
+    {
+      'ad': '🕌 Regaib Kandili',
+      'tarih': '2026-12-10',
+      'aciklama': 'Üç ayların başlangıcı, rahmet ve bereket gecesi.',
+      'bildirim': false
     },
   ];
+
+  static final List<Map<String, dynamic>> _milliGunler = [
+    {
+      'ad': '🇹🇷 Ulusal Egemenlik ve Çocuk Bayramı',
+      'tarih': '2026-04-23',
+      'aciklama':
+          'Türkiye Büyük Millet Meclisi\'nin açılışı ve çocuklara armağan edilen bayram.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Atatürk\'ü Anma ve Gençlik ve Spor Bayramı',
+      'tarih': '2026-05-19',
+      'aciklama':
+          'Mustafa Kemal Atatürk\'ün Samsun\'a çıkışı ve gençliğe armağanı.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Demokrasi ve Millî Birlik Günü',
+      'tarih': '2026-07-15',
+      'aciklama':
+          '15 Temmuz darbe girişimine karşı milletin demokrasi ve bağımsızlık mücadelesi.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Zafer Bayramı',
+      'tarih': '2026-08-30',
+      'aciklama':
+          'Büyük Taarruz\'un zaferle sonuçlanması, Türk ordusunun kahramanlığı.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Cumhuriyet Bayramı',
+      'tarih': '2026-10-29',
+      'aciklama':
+          'Türkiye Cumhuriyeti\'nin ilanı, bağımsızlık ve çağdaşlaşma bayramı.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Gaziler Günü',
+      'tarih': '2026-09-19',
+      'aciklama': 'Gazilerimizi minnet ve şükranla anıyoruz.',
+      'bildirim': false
+    },
+  ];
+
+  static final List<Map<String, dynamic>> _digerOzelGunler = [
+    {
+      'ad': '🌍 Dünya Kadınlar Günü',
+      'tarih': '2026-03-08',
+      'aciklama': 'Kadın hakları ve eşitlik mücadelesinin simgesi.',
+      'bildirim': false
+    },
+    {
+      'ad': '💪 Dünya Engelliler Günü',
+      'tarih': '2026-12-03',
+      'aciklama':
+          'Engelli bireylerin haklarına dikkat çekmek için birleşiyoruz.',
+      'bildirim': false
+    },
+    {
+      'ad': '🌍 Dünya Çocuk Hakları Günü',
+      'tarih': '2026-11-20',
+      'aciklama':
+          'Çocuk haklarının korunması ve geliştirilmesi için farkındalık günü.',
+      'bildirim': false
+    },
+    {
+      'ad': '🌍 Dünya Barış Günü',
+      'tarih': '2026-09-21',
+      'aciklama': 'Dünya barışı için umut ve birlik mesajı.',
+      'bildirim': false
+    },
+    {
+      'ad': '🌍 Dünya Felsefe Günü',
+      'tarih': '2026-11-20',
+      'aciklama': 'Düşünme ve sorgulama sanatını kutluyoruz.',
+      'bildirim': false
+    },
+    {
+      'ad': '🕯️ İnsan Hakları Günü',
+      'tarih': '2026-12-10',
+      'aciklama': 'İnsan haklarının evrenselliğine vurgu yapıyoruz.',
+      'bildirim': false
+    },
+  ];
+
+  static List<Map<String, dynamic>> get _tumGunler {
+    // ignore: prefer_const_constructors
+    List<Map<String, dynamic>> all = [];
+    all.addAll(_ozelGunler);
+    all.addAll(_diniGunler);
+    all.addAll(_milliGunler);
+    all.addAll(_digerOzelGunler);
+    return all;
+  }
 
   static Map<String, dynamic>? getYaklasanOzelGun() {
-    DateTime now = DateTime.now();
-    int currentYear = now.year;
+    DateTime simdi = DateTime.now();
+    DateTime bugunYalin = DateTime(simdi.year, simdi.month, simdi.day);
+    int currentYear = simdi.year;
 
     List<Map<String, dynamic>> tumGunler = [];
 
-    for (var gun in _ozelGunler) {
+    for (var gun in _tumGunler) {
       String tarih = gun['tarih'];
       List<String> parts = tarih.split('-');
-      String yeniTarih = '$currentYear-${parts[1]}-${parts[2]}';
-      if (DateTime.parse(yeniTarih).isBefore(now) && int.parse(parts[1]) < 12) {
-        yeniTarih = '${currentYear + 1}-${parts[1]}-${parts[2]}';
-      }
-      tumGunler.add({
-        'ad': gun['ad'],
-        'tarih': yeniTarih,
-        'aciklama': gun['aciklama'],
-        'tur': 'ozel',
-      });
-    }
 
-    for (var gun in _dogumGunleri) {
-      String tarih = gun['tarih'];
-      List<String> parts = tarih.split('-');
-      String yeniTarih = '$currentYear-${parts[1]}-${parts[2]}';
-      if (DateTime.parse(yeniTarih).isBefore(now)) {
-        yeniTarih = '${currentYear + 1}-${parts[1]}-${parts[2]}';
+      DateTime hedefTarih =
+          DateTime(currentYear, int.parse(parts[1]), int.parse(parts[2]));
+
+      if (hedefTarih.isBefore(bugunYalin)) {
+        hedefTarih =
+            DateTime(currentYear + 1, int.parse(parts[1]), int.parse(parts[2]));
       }
+
       tumGunler.add({
         'ad': gun['ad'],
-        'tarih': yeniTarih,
+        'tarih': DateFormat('yyyy-MM-dd').format(hedefTarih),
         'aciklama': gun['aciklama'],
-        'tur': 'dogum',
-        'hafta': gun.containsKey('hafta'),
+        'bildirim': gun['bildirim'] ?? false,
       });
     }
 
@@ -470,28 +774,25 @@ class OzelGunler {
 
     for (var gun in tumGunler) {
       DateTime gunTarih = DateTime.parse(gun['tarih']);
-      if (gun['tur'] == 'dogum' &&
-          gun.containsKey('hafta') &&
-          gun['hafta'] == true) {
-        if (now.month == 10 && now.day >= 1 && now.day <= 7) {
-          return {
-            'ad': gun['ad'],
-            'kalanGun': 7 - now.day,
-            'aciklama': gun['aciklama'],
-            'tarih': gun['tarih'],
-            'tur': 'dogum',
-            'hafta': true,
-          };
-        }
-      }
-      if (gunTarih.isAfter(now) || gunTarih.isAtSameMomentAs(now)) {
-        int kalanGun = gunTarih.difference(now).inDays;
+      int kalanGun = (gunTarih.difference(bugunYalin).inHours / 24).round();
+
+      if (kalanGun == 0) {
+        return {
+          'ad': gun['ad'],
+          'kalanGun': 0,
+          'kalanGunText': '🌸 BUGÜN 🌸',
+          'aciklama': gun['aciklama'],
+          'tarih': gun['tarih'],
+          'bildirim': gun['bildirim'] ?? false,
+        };
+      } else if (kalanGun > 0) {
         return {
           'ad': gun['ad'],
           'kalanGun': kalanGun,
+          'kalanGunText': '$kalanGun gün sonra 🌷',
           'aciklama': gun['aciklama'],
           'tarih': gun['tarih'],
-          'tur': gun['tur'],
+          'bildirim': gun['bildirim'] ?? false,
         };
       }
     }
@@ -500,31 +801,25 @@ class OzelGunler {
 
   static String? bugunOzelGunVarMi() {
     DateTime now = DateTime.now();
-    String bugun = DateFormat('yyyy-MM-dd').format(now);
+    String bugunAyGun = DateFormat('MM-dd').format(now);
 
-    for (var gun in _ozelGunler) {
+    List<Map<String, dynamic>> bildirimGunleri = [];
+    bildirimGunleri.addAll(_ozelGunler);
+
+    for (var gun in bildirimGunleri) {
       String tarih = gun['tarih'];
       List<String> parts = tarih.split('-');
-      String kontrolTarih = '${now.year}-${parts[1]}-${parts[2]}';
-      if (kontrolTarih == bugun) {
-        return gun['ad'];
-      }
-    }
+      String kontrolAyGun = '${parts[1]}-${parts[2]}';
 
-    for (var gun in _dogumGunleri) {
-      String tarih = gun['tarih'];
-      List<String> parts = tarih.split('-');
-      String kontrolTarih = '${now.year}-${parts[1]}-${parts[2]}';
-      if (kontrolTarih == bugun) {
+      if (kontrolAyGun == bugunAyGun) {
         return gun['ad'];
-      }
-      if (gun['ad'] == '🌻 SÜMEYRA\'NIN DOĞUM GÜNÜ HAFTASI') {
-        if (now.month == 10 && now.day >= 1 && now.day <= 7) {
-          return '🌻 SÜMEYRA\'NIN DOĞUM GÜNÜ HAFTASI';
-        }
       }
     }
     return null;
+  }
+
+  static List<Map<String, dynamic>> getTumOzelGunler() {
+    return _tumGunler;
   }
 }
 
@@ -571,6 +866,16 @@ class GunlukIcerikServisi {
     "Gülümsemen bile senin için bir sadakadır. (Tirmizî)",
     "Allah güzeldir, güzelliği sever. (Müslim)",
     "İyilik, güzel ahlaktır. (Müslim)",
+    "Allah'ım! Senden af ve afiyet dilerim. (Tirmizî)",
+    "Dünya, ahiretin tarlasıdır. (Hadis-i Şerif)",
+    "İki nimet vardır ki insanlar onların kıymetini bilmez: sağlık ve boş vakit. (Buhari)",
+    "Kulun Allah'a en yakın olduğu an secde anıdır. (Müslim)",
+    "Birbirinizi seviniz, birbirinize hediye veriniz. (Müslim)",
+    "Mümin, bir delikten iki defa sokulmaz. (Buhari)",
+    "Sizden biri, kendisi için sevdiğini kardeşi için de sevmedikçe iman etmiş olmaz. (Buhari)",
+    "Allah, sabredenlerle beraberdir. (Buhari)",
+    "Kişi, sevdiği ile beraberdir. (Buhari)",
+    "Dinin en hayırlısı, en kolay olanıdır. (Buhari)",
   ];
 
   static const List<String> dualar = [
@@ -579,8 +884,16 @@ class GunlukIcerikServisi {
     "Rabbenâ âtinâ fid-dünyâ haseneten ve fil âhirati haseneten ve kınâ azâben-nâr. (Bakara, 201)",
     "Rabbi zidnî ilmâ. (Tâhâ, 114)",
     "Allah'ım! Beni senden uzaklaştıracak her şeyden koru.",
-    "Rabbenağfirlî ve li vâlideyye. (İbrahim, 41)",
+    "Rabenağfirlî ve li vâlideyye. (İbrahim, 41)",
     "Hasbunallâhu ve ni'mel vekîl. (Âl-i İmrân, 173)",
+    "Allah'ım! Nefsimi takvâ ile donat, onu temizle. (Müslim)",
+    "Rabbim! Bana ve ana babama merhamet et. (İsra, 24)",
+    "Allah'ım! Senden hidayet, takva, iffet ogle gönül zenginliği dilerim. (Müslim)",
+    "Allah'ım! Bana rızkını helalinden ver.",
+    "Rabbim! Bana sabır ve ferahlık ver.",
+    "Allah'ım! Beni affet, bana merhamet et.",
+    "Rabbim! Bana hayırlı bir eş ve hayırlı evlat ver.",
+    "Allah'ım! Senden cennetini ve cennete yaklaştıran söz ve ameli dilerim.",
   ];
 
   static const List<String> esmalar = [
@@ -589,6 +902,13 @@ class GunlukIcerikServisi {
     "El-Melik (Mülkün, evrenin mutlak sahibi)",
     "El-Kuddûs (Her türlü eksiklikten uzak olan)",
     "Es-Selâm (Kullarını selamete çıkaran)",
+    "El-Mü'min (Kullarını imanla buluşturan)",
+    "El-Müheymin (Her şeyi koruyup gözeten)",
+    "El-Azîz (Mutlak güç sahibi)",
+    "El-Cebbâr (Dilediğini zorla yaptıran)",
+    "El-Mütekebbir (Büyüklükte eşsiz olan)",
+    "El-Hâlık (Yaratan)",
+    "El-Bârî (Her şeyi mükemmel yaratan)",
   ];
 
   static Future<String> gununAyetiGetir() async {
@@ -887,32 +1207,101 @@ class KuranWebView extends StatefulWidget {
 }
 
 class _KuranWebViewState extends State<KuranWebView> {
-  late final WebViewController _controller;
+  late WebViewController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(
-          widget.isDark ? const Color(0xFF1A1118) : Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (int progress) {},
-          onPageStarted: (String url) {},
-          onPageFinished: (String url) {},
-        ),
-      )
-      ..loadRequest(Uri.parse('https://kuran.diyanet.gov.tr/mushaf'));
+    _kuranSayfasiniYukle();
+  }
+
+  void _kuranSayfasiniYukle() {
+    try {
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(
+            widget.isDark ? const Color(0xFF1A1118) : Colors.white)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (String url) {
+              setState(() {
+                _isLoading = false;
+              });
+            },
+            onWebResourceError: (WebResourceError error) {
+              setState(() {
+                _isLoading = false;
+                _hasError = true;
+              });
+            },
+          ),
+        )
+        ..loadRequest(Uri.parse('https://kuran.diyanet.gov.tr/mushaf'));
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WebViewWidget(controller: _controller);
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 60,
+              color: widget.isDark ? Colors.white54 : Colors.black54,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "🌺 Kuran sayfası yüklenirken hata oluştu.\nİnternet bağlantınızı kontrol edin.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: widget.isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _hasError = false;
+                  _isLoading = true;
+                  _kuranSayfasiniYukle();
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB5627A),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Yeniden Dene 🌸"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        WebViewWidget(controller: _controller),
+        if (_isLoading)
+          const Center(
+            child: CircularProgressIndicator(color: Color(0xFFB5627A)),
+          ),
+      ],
+    );
   }
 }
 
-// ==================== KIBLE WEB VIEW (DİYANET KIBLE BULUCU) ====================
+// ==================== KIBLE WEB VIEW (GOOGLE KIBLE BULUCU - KONUM DÜZELTİLDİ) ====================
+// ==================== KIBLE WEB VIEW (GOOGLE KIBLE BULUCU) ====================
 class KibleWebView extends StatefulWidget {
   final bool isDark;
 
@@ -923,28 +1312,157 @@ class KibleWebView extends StatefulWidget {
 }
 
 class _KibleWebViewState extends State<KibleWebView> {
-  late final WebViewController _controller;
+  late WebViewController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
+  bool _konumIzniVerildi = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(
-          widget.isDark ? const Color(0xFF1A1118) : Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (int progress) {},
-          onPageStarted: (String url) {},
-          onPageFinished: (String url) {},
-        ),
-      )
-      ..loadRequest(Uri.parse('https://kible.diyanet.gov.tr/'));
+    _kibleSayfasiniYukle();
+  }
+
+  Future<void> _kibleSayfasiniYukle() async {
+    // Konum izni (sadece mobilde)
+    if (!kIsWeb) {
+      final konumStatus = await Permission.location.status;
+      if (!konumStatus.isGranted) {
+        await Permission.location.request();
+      }
+      _konumIzniVerildi = await Permission.location.isGranted;
+      debugPrint("📍 Konum izni: $_konumIzniVerildi");
+    }
+
+    try {
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(
+            widget.isDark ? const Color(0xFF1A1118) : Colors.white)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (String url) {
+              setState(() {
+                _isLoading = false;
+              });
+            },
+            onWebResourceError: (WebResourceError error) {
+              setState(() {
+                _isLoading = false;
+                _hasError = true;
+              });
+            },
+          ),
+        )
+        ..loadRequest(Uri.parse('https://qiblafinder.withgoogle.com/intl/tr/'));
+
+      // 🔥 GEOLOCATION İZNİ: SADECE MOBİLDE ve webview_flutter_android mevcutsa
+      if (!kIsWeb) {
+        try {
+          // ignore: deprecated_member_use
+          final androidController = _controller.platform;
+          // AndroidWebViewController'a cast et ve geolocation izni ayarla
+          if (androidController is AndroidWebViewController) {
+            // Geolocation izni için JavaScript API'yi etkinleştir
+            androidController.setGeolocationEnabled(true);
+          }
+        } catch (e) {
+          debugPrint("WebView Geolocation ayarı hatası: $e");
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WebViewWidget(controller: _controller);
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 60,
+              color: widget.isDark ? Colors.white54 : Colors.black54,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "🕋 Kıble sayfası yüklenirken hata oluştu.\nİnternet bağlantınızı kontrol edin.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: widget.isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _hasError = false;
+                  _isLoading = true;
+                  _kibleSayfasiniYukle();
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB5627A),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Yeniden Dene 🌸"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!_konumIzniVerildi && !kIsWeb) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.location_off,
+              size: 60,
+              color: widget.isDark ? Colors.white54 : Colors.black54,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "📍 Konum izni verilmedi.\nKıble bulucu için konum izni gereklidir.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: widget.isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                openAppSettings();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB5627A),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Ayarlara Git 🌸"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        WebViewWidget(controller: _controller),
+        if (_isLoading)
+          const Center(
+            child: CircularProgressIndicator(color: Color(0xFFB5627A)),
+          ),
+      ],
+    );
   }
 }
 
@@ -952,11 +1470,13 @@ class _KibleWebViewState extends State<KibleWebView> {
 class AnaSayfaGezgini extends StatefulWidget {
   final bool isDarkMode;
   final ValueChanged<bool> onThemeChanged;
+  final bool bildirimIzniKaliciRed;
 
   const AnaSayfaGezgini({
     super.key,
     required this.isDarkMode,
     required this.onThemeChanged,
+    required this.bildirimIzniKaliciRed,
   });
 
   @override
@@ -965,9 +1485,9 @@ class AnaSayfaGezgini extends StatefulWidget {
 
 class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   int _aktifSayfaIndex = 0;
-  String secilenSehir = "Muş";
-  String secilenIlce = "Merkez";
-  bool isLoading = true;
+  String secilenSehir = "Seçilmedi";
+  String secilenIlce = "Seçilmedi";
+  bool isLoading = false;
   List<dynamic> aylikVeriHavuzu = [];
 
   final Map<String, List<String>> _ilIlceMap = {
@@ -1050,13 +1570,6 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
     ],
   };
 
-  final List<Map<String, String>> _sabitSehirler = [
-    {"display": "🌸 Muş (Merkez)", "il": "Muş", "ilce": "Merkez"},
-    {"display": "🌸 Balıkesir (Gönen)", "il": "Balıkesir", "ilce": "Gönen"},
-    {"display": "🌸 Malatya (Merkez)", "il": "Malatya", "ilce": "Merkez"},
-    {"display": "🌸 Sivas (Şarkışla)", "il": "Sivas", "ilce": "Şarkışla"},
-  ];
-
   List<Map<String, String>> _kullaniciSehirler = [];
 
   Map<String, String> bugununVakitleri = {
@@ -1073,7 +1586,8 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   double ilerlemeOrani = 1.0;
   Timer? _saniyeSayaci;
 
-  bool _vakitGeldiMi = false;
+  String _sonBildirimGonderilenVakit = "";
+  int _sonBildirimGuncellemeSaniyesi = -1;
 
   bool _vakitOncesiUyari = true;
   double _kacDakikaOnceSlider = 15.0;
@@ -1179,14 +1693,23 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   void initState() {
     super.initState();
     _yukleTumAyarlar().then((_) {
-      ezanVakitleriniGetir();
+      if (secilenSehir != "Seçilmedi") {
+        ezanVakitleriniGetir();
+      }
     });
+
     _saniyeSayaci = Timer.periodic(const Duration(seconds: 1), (timer) {
       sayaciGuncelle();
-      _bildirimCubuguGuncelle();
       _kaydetKalanSure();
       _ozelGunKontrol();
     });
+
+    // 🔥 Bildirim izni kalıcı reddedilmişse dialog göster
+    if (widget.bildirimIzniKaliciRed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _bildirimIzniDialogGoster();
+      });
+    }
   }
 
   @override
@@ -1195,8 +1718,43 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
     super.dispose();
   }
 
-  List<Map<String, String>> get _tumSehirler {
-    return [..._sabitSehirler, ..._kullaniciSehirler];
+  void _bildirimIzniDialogGoster() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor:
+            widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
+        title: const Text(
+          "🔔 Bildirim İzni Gerekli",
+          style: TextStyle(color: Color(0xFFB5627A)),
+        ),
+        content: const Text(
+          "Uygulamanın namaz vakitlerini hatırlatabilmesi için bildirim izni gereklidir.\n\nLütfen Ayarlar > Uygulamalar > Ezan Vakti > Bildirimler yolunu izleyerek izni açın.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "Daha Sonra",
+              style: TextStyle(color: Color(0xFFB5627A)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              openAppSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE8C4D0),
+              foregroundColor: const Color(0xFF4A2E3B),
+            ),
+            child: const Text("Ayarlara Git 🌸"),
+          ),
+        ],
+      ),
+    );
   }
 
   void _ozelGunKontrol() {
@@ -1218,8 +1776,8 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   }
 
   void _sehirEkleDiyalogunuGoster() {
-    String? secilenIl;
-    String? secilenIlce;
+    String? yerelSecilenIl;
+    String? yerelSecilenIlce;
 
     showDialog(
       context: context,
@@ -1231,8 +1789,9 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
             backgroundColor:
                 widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
             title: const Text(
-              "🌸 Şehir Ekle",
-              style: TextStyle(color: Color(0xFFB5627A)),
+              "🌸 Konum Ekle",
+              style: TextStyle(
+                  color: Color(0xFFB5627A), fontWeight: FontWeight.bold),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1241,38 +1800,38 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                   decoration: InputDecoration(
                     labelText: "İl Seçin",
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                        borderRadius: BorderRadius.circular(16)),
                   ),
-                  value: secilenIl,
+                  initialValue: yerelSecilenIl,
                   items: turkiyeIlleri.map((il) {
                     return DropdownMenuItem(value: il, child: Text(il));
                   }).toList(),
                   onChanged: (value) {
                     setStateDialog(() {
-                      secilenIl = value;
-                      secilenIlce = null;
+                      yerelSecilenIl = value;
+                      yerelSecilenIlce = null;
                     });
                   },
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 15),
                 DropdownButtonFormField<String>(
                   decoration: InputDecoration(
                     labelText: "İlçe Seçin",
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                        borderRadius: BorderRadius.circular(16)),
+                    enabled: yerelSecilenIl != null,
                   ),
-                  value: secilenIlce,
-                  items: secilenIl != null && _ilIlceMap.containsKey(secilenIl)
-                      ? _ilIlceMap[secilenIl]!.map((ilce) {
+                  initialValue: yerelSecilenIlce,
+                  items: yerelSecilenIl != null &&
+                          _ilIlceMap.containsKey(yerelSecilenIl)
+                      ? _ilIlceMap[yerelSecilenIl]!.map((ilce) {
                           return DropdownMenuItem(
                               value: ilce, child: Text(ilce));
                         }).toList()
                       : [],
                   onChanged: (value) {
                     setStateDialog(() {
-                      secilenIlce = value;
+                      yerelSecilenIlce = value;
                     });
                   },
                 ),
@@ -1281,34 +1840,31 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "İptal",
-                  style: TextStyle(color: Color(0xFFB5627A)),
-                ),
+                child: const Text("İptal",
+                    style: TextStyle(color: Color(0xFFB5627A))),
               ),
               ElevatedButton(
-                onPressed: () {
-                  if (secilenIl != null && secilenIlce != null) {
-                    setState(() {
-                      _kullaniciSehirler.add({
-                        "display": "🌸 $secilenIl ($secilenIlce)",
-                        "il": secilenIl!,
-                        "ilce": secilenIlce!,
-                      });
-                      secilenSehir = secilenIl!;
-                      secilenIlce = secilenIlce!;
-                    });
-                    _kaydetTumAyarlar();
-                    ezanVakitleriniGetir();
-                    Navigator.pop(context);
-                  }
-                },
+                onPressed: (yerelSecilenIl != null && yerelSecilenIlce != null)
+                    ? () {
+                        setState(() {
+                          _kullaniciSehirler.add({
+                            "display": "🌸 $yerelSecilenIl ($yerelSecilenIlce)",
+                            "il": yerelSecilenIl!,
+                            "ilce": yerelSecilenIlce!,
+                          });
+                          secilenSehir = yerelSecilenIl!;
+                          secilenIlce = yerelSecilenIlce!;
+                        });
+                        _kaydetTumAyarlar();
+                        ezanVakitleriniGetir();
+                        Navigator.pop(context);
+                      }
+                    : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE8C4D0),
                   foregroundColor: const Color(0xFF4A2E3B),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                      borderRadius: BorderRadius.circular(20)),
                 ),
                 child: const Text("Ekle 🌸"),
               ),
@@ -1320,6 +1876,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   }
 
   Future<void> ezanVakitleriniGetir() async {
+    if (secilenSehir == "Seçilmedi") return;
     if (!mounted) return;
     setState(() => isLoading = true);
     try {
@@ -1362,7 +1919,14 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
         };
       });
     }
+    // 🔥 BURAYA EKLE
+    _schedulePrayerNotificationsIfReady();
     sayaciGuncelle();
+  }
+
+  void _schedulePrayerNotificationsIfReady() {
+    if (bugununVakitleri.values.any((v) => v == "--:--")) return;
+    schedulePrayerNotifications(bugununVakitleri);
   }
 
   String temizleZaman(String? v) {
@@ -1403,7 +1967,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
       vakitIsmi = "İkindi";
     } else if (simdi.isBefore(aksamTime)) {
       hedeflenenVakit = aksamTime;
-      baslangicTime = ikindiTime;
+      baslangicTime = ogleTime;
       vakitIsmi = "Akşam";
     } else if (simdi.isBefore(yatsiTime)) {
       hedeflenenVakit = yatsiTime;
@@ -1418,19 +1982,28 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
     final toplamSure = hedeflenenVakit.difference(baslangicTime);
     final kalanSureDuration = hedeflenenVakit.difference(simdi);
 
+    // VAKİT ÖNCESİ UYARI
     if (_vakitOncesiUyari) {
-      int erkenUyariSaniyesi = (_kacDakikaOnceSlider.toInt() * 60);
-      if (kalanSureDuration.inSeconds == erkenUyariSaniyesi) {
-        showNotification(
-          "⏰ Vakit Yaklaşıyor 🌸",
-          "$vakitIsmi vaktine ${_kacDakikaOnceSlider.toInt()} dakika kaldı.",
-        );
+      int erkenUyariDakikasi = _kacDakikaOnceSlider.toInt();
+      if (kalanSureDuration.inMinutes == erkenUyariDakikasi &&
+          kalanSureDuration.inSeconds % 60 == 0) {
+        String uyariKey = "${vakitIsmi}_uyari_${simdi.day}";
+        if (_sonBildirimGonderilenVakit != uyariKey) {
+          _sonBildirimGonderilenVakit = uyariKey;
+          showNotification(
+            "⏰ Vakit Yaklaşıyor 🌸",
+            "$vakitIsmi vaktine $erkenUyariDakikasi dakika kaldı.",
+          );
+        }
       }
     }
 
-    if (kalanSureDuration.inSeconds <= 0 && !_vakitGeldiMi) {
-      _vakitGeldiMi = true;
-      if (_seciliVakitler[vakitIsmi] == true) {
+    // VAKİT GELDİ UYARISI
+    if (kalanSureDuration.inSeconds <= 0) {
+      String vakitGeldiKey = "${vakitIsmi}_geldi_${simdi.day}";
+      if (_seciliVakitler[vakitIsmi] == true &&
+          _sonBildirimGonderilenVakit != vakitGeldiKey) {
+        _sonBildirimGonderilenVakit = vakitGeldiKey;
         bool sesli = _bildirimSesTipi != "silent";
         showNotification(
           "🕌 $vakitIsmi Vakti Geldi 🌸",
@@ -1441,8 +2014,6 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
           _tamEkranUyariGoster(vakitIsmi);
         }
       }
-    } else if (kalanSureDuration.inSeconds > 0) {
-      _vakitGeldiMi = false;
     }
 
     if (mounted) {
@@ -1453,14 +2024,22 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
         kalanSure =
             "${kalanSureDuration.inHours.toString().padLeft(2, '0')}:${(kalanSureDuration.inMinutes % 60).toString().padLeft(2, '0')}:${(kalanSureDuration.inSeconds % 60).toString().padLeft(2, '0')}";
       });
+
+      if (simdi.second != _sonBildirimGuncellemeSaniyesi) {
+        _sonBildirimGuncellemeSaniyesi = simdi.second;
+        _bildirimCubuguGuncelle();
+      }
       _kaydetKalanSure();
     }
   }
 
   void _bildirimCubuguGuncelle() async {
-    if (_bildirimCubugu && kalanSure != "00:00:00") {
-      await updateNotification(kalanSure, siradakiVakit);
-    } else if (!_bildirimCubugu) {
+    if (_bildirimCubugu) {
+      final gosterilecekSure = kalanSure == "00:00:00" ? "--:--:--" : kalanSure;
+      final gosterilecekVakit =
+          siradakiVakit == "Yükleniyor..." ? "Namaz" : siradakiVakit;
+      await updateNotification(gosterilecekSure, gosterilecekVakit);
+    } else {
       await cancelNotification();
     }
   }
@@ -1539,18 +2118,14 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
       _bildirimSesTipi = prefs.getString('bildirim_ses_tipi') ?? "default";
       _tamEkranUyari = prefs.getBool('tam_ekran_uyari') ?? false;
       _bildirimCubugu = prefs.getBool('bildirim_cubugu') ?? false;
-      secilenSehir = prefs.getString('secilen_sehir') ?? "Muş";
-      secilenIlce = prefs.getString('secilen_ilce') ?? "Merkez";
+      secilenSehir = prefs.getString('secilen_sehir') ?? "Seçilmedi";
+      secilenIlce = prefs.getString('secilen_ilce') ?? "Seçilmedi";
 
       String? seciliVakitlerJson = prefs.getString('secili_vakitler');
       if (seciliVakitlerJson != null) {
         Map<String, dynamic> json = jsonDecode(seciliVakitlerJson);
         _seciliVakitler = json.map((k, v) => MapEntry(k, v as bool));
       }
-      if (!_seciliVakitler.containsKey("Güneş")) {
-        _seciliVakitler["Güneş"] = true;
-      }
-
       String? kullaniciSehirlerJson = prefs.getString('kullanici_sehirler');
       if (kullaniciSehirlerJson != null) {
         List<dynamic> json = jsonDecode(kullaniciSehirlerJson);
@@ -1567,8 +2142,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
       backgroundColor:
           widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -1588,16 +2162,14 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                         const Text(
                           "🌸 Uygulama Ayarları",
                           style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFB5627A),
-                          ),
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFB5627A)),
                         ),
                         const Divider(color: Color(0xFFE8C4D0)),
                         SwitchListTile(
                           title: const Text(
-                            "🌷 Vaktinden önce uyarılmak istiyor musun?",
-                          ),
+                              "🌷 Vaktinden önce uyarılmak istiyor musun?"),
                           value: _vakitOncesiUyari,
                           onChanged: (val) {
                             setModalState(() => _vakitOncesiUyari = val);
@@ -1612,17 +2184,15 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
-                                  "Hatırlatma Süresi:",
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
+                                const Text("Hatırlatma Süresi:",
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
                                 Text(
                                   "${_kacDakikaOnceSlider.toInt()} dakika önce",
                                   style: const TextStyle(
-                                    color: Color(0xFFB5627A),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
+                                      color: Color(0xFFB5627A),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16),
                                 ),
                               ],
                             ),
@@ -1643,13 +2213,10 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                           ),
                         ],
                         const SizedBox(height: 10),
-                        const Text(
-                          "Bildirim kurulacak vakitleri seçin:",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFB5627A),
-                          ),
-                        ),
+                        const Text("Bildirim kurulacak vakitleri seçin:",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFB5627A))),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -1659,8 +2226,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                               selected: _seciliVakitler[vakit]!,
                               onSelected: (val) {
                                 setModalState(
-                                  () => _seciliVakitler[vakit] = val,
-                                );
+                                    () => _seciliVakitler[vakit] = val);
                                 setState(() => _seciliVakitler[vakit] = val);
                                 _kaydetTumAyarlar();
                               },
@@ -1673,8 +2239,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                         SwitchListTile(
                           title: const Text("🦋 Tam Ekran Uyarı"),
                           subtitle: const Text(
-                            "Ekran kapalı/açık olsa da tam uyarı metni kaplasın",
-                          ),
+                              "Ekran kapalı/açık olsa da tam uyarı metni kaplasın"),
                           value: _tamEkranUyari,
                           onChanged: (val) {
                             setModalState(() => _tamEkranUyari = val);
@@ -1693,30 +2258,24 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                                 backgroundColor: const Color(0xFFE8C4D0),
                                 foregroundColor: const Color(0xFF4A2E3B),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
+                                    borderRadius: BorderRadius.circular(20)),
                               ),
-                              onPressed: () {
-                                _tamEkranUyariGoster("Test");
-                              },
+                              onPressed: () => _tamEkranUyariGoster("Test"),
                             ),
                           ),
                         const SizedBox(height: 10),
                         SwitchListTile(
                           title: const Text("🌼 Bildirim Çubuğu"),
                           subtitle: const Text(
-                            "Namaz vaktine kalan süre bildirim çubuğunda sabit dursun",
-                          ),
+                              "Namaz vaktine kalan süre bildirim çubuğunda sabit dursun"),
                           value: _bildirimCubugu,
                           onChanged: (val) async {
                             setModalState(() => _bildirimCubugu = val);
                             setState(() => _bildirimCubugu = val);
                             _kaydetTumAyarlar();
+
                             if (val) {
-                              await updateNotification(
-                                kalanSure,
-                                siradakiVakit,
-                              );
+                              _bildirimCubuguGuncelle();
                             } else {
                               await cancelNotification();
                             }
@@ -1734,30 +2293,32 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                           activeThumbColor: const Color(0xFFB5627A),
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          "🏙️ Şehir / İlçe Seçimi",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFB5627A),
-                          ),
-                        ),
+                        const Text("🏙️ Şehir / İlçe Listem",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFB5627A))),
                         const SizedBox(height: 5),
-                        Column(
-                          children: _tumSehirler.map((sehir) {
-                            bool isSabit = _sabitSehirler.contains(sehir);
-                            return ListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(sehir["display"]!),
-                              trailing: isSabit
-                                  ? null
-                                  : IconButton(
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        color: Colors.red,
-                                        size: 20,
-                                      ),
+                        _kullaniciSehirler.isEmpty
+                            ? const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: Text(
+                                    "Henüz hiç şehir eklemediniz. Lütfen 'Yeni Ekle' butonunu kullanın. 🌷",
+                                    style: TextStyle(
+                                        fontSize: 13, color: Colors.grey)),
+                              )
+                            : Column(
+                                children: _kullaniciSehirler.map((sehir) {
+                                  return ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(sehir["display"]!),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete_outline,
+                                          color: Colors.red, size: 22),
                                       onPressed: () {
+                                        setModalState(() {
+                                          _kullaniciSehirler.remove(sehir);
+                                        });
                                         setState(() {
                                           _kullaniciSehirler.remove(sehir);
                                         });
@@ -1766,102 +2327,57 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                                           final son = _kullaniciSehirler.last;
                                           secilenSehir = son["il"]!;
                                           secilenIlce = son["ilce"]!;
+                                          ezanVakitleriniGetir();
                                         } else {
-                                          final ilk = _sabitSehirler.first;
-                                          secilenSehir = ilk["il"]!;
-                                          secilenIlce = ilk["ilce"]!;
+                                          secilenSehir = "Seçilmedi";
+                                          secilenIlce = "Seçilmedi";
+                                          setState(() {
+                                            bugununVakitleri = {
+                                              "İmsak": "--:--",
+                                              "Güneş": "--:--",
+                                              "Öğle": "--:--",
+                                              "İkindi": "--:--",
+                                              "Akşam": "--:--",
+                                              "Yatsı": "--:--",
+                                            };
+                                          });
                                         }
-                                        ezanVakitleriniGetir();
                                       },
                                     ),
-                              onTap: () {
-                                setState(() {
-                                  secilenSehir = sehir["il"]!;
-                                  secilenIlce = sehir["ilce"]!;
-                                });
-                                ezanVakitleriniGetir();
-                                _kaydetTumAyarlar();
-                                Navigator.pop(context);
-                              },
-                            );
-                          }).toList(),
-                        ),
+                                    onTap: () {
+                                      setState(() {
+                                        secilenSehir = sehir["il"]!;
+                                        secilenIlce = sehir["ilce"]!;
+                                      });
+                                      ezanVakitleriniGetir();
+                                      _kaydetTumAyarlar();
+                                      Navigator.pop(context);
+                                    },
+                                  );
+                                }).toList(),
+                              ),
+                        const SizedBox(height: 15),
                         Row(
                           children: [
                             Expanded(
-                              child: DropdownButton<String>(
-                                value: _tumSehirler.any(
-                                  (s) =>
-                                      s["il"] == secilenSehir &&
-                                      s["ilce"] == secilenIlce,
-                                )
-                                    ? "$secilenSehir|||$secilenIlce"
-                                    : null,
-                                isExpanded: true,
-                                hint: Text(secilenSehir),
-                                items: _tumSehirler.map((sehir) {
-                                  String value =
-                                      "${sehir["il"]}|||${sehir["ilce"]}";
-                                  bool isSabit = _sabitSehirler.contains(sehir);
-                                  return DropdownMenuItem(
-                                    value: value,
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(sehir["display"]!),
-                                        ),
-                                        if (!isSabit)
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.delete_outline,
-                                              color: Colors.red,
-                                              size: 20,
-                                            ),
-                                            onPressed: () {
-                                              setState(() {
-                                                _kullaniciSehirler.remove(
-                                                  sehir,
-                                                );
-                                              });
-                                              _kaydetTumAyarlar();
-                                              if (_kullaniciSehirler
-                                                  .isNotEmpty) {
-                                                final son =
-                                                    _kullaniciSehirler.last;
-                                                secilenSehir = son["il"]!;
-                                                secilenIlce = son["ilce"]!;
-                                              } else {
-                                                final ilk =
-                                                    _sabitSehirler.first;
-                                                secilenSehir = ilk["il"]!;
-                                                secilenIlce = ilk["ilce"]!;
-                                              }
-                                              ezanVakitleriniGetir();
-                                            },
-                                          ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    List<String> parts = val.split("|||");
-                                    String il = parts[0];
-                                    String ilce = parts[1];
-                                    setState(() {
-                                      secilenSehir = il;
-                                      secilenIlce = ilce;
-                                    });
-                                    ezanVakitleriniGetir();
-                                    _kaydetTumAyarlar();
-                                  }
-                                },
+                              child: Text(
+                                "Aktif Konum: $secilenSehir ($secilenIlce)",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: widget.isDarkMode
+                                        ? Colors.white70
+                                        : Colors.black87),
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.add_circle,
-                                color: Color(0xFFB5627A),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.add_circle,
+                                  color: Color(0xFFB5627A)),
+                              label: const Text("Yeni Ekle"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFE8C4D0),
+                                foregroundColor: const Color(0xFF4A2E3B),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
                               ),
                               onPressed: () {
                                 Navigator.pop(context);
@@ -1895,36 +2411,30 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: widget.isDarkMode
                         ? [
                             const Color(0xFF2D1B2E).withValues(alpha: 0.7),
-                            const Color(0xFF1A1118).withValues(alpha: 0.5),
+                            const Color(0xFF1A1118).withValues(alpha: 0.5)
                           ]
                         : [
                             Colors.white.withValues(alpha: 0.6),
-                            const Color(0xFFFDF0F2).withValues(alpha: 0.3),
+                            const Color(0xFFFDF0F2).withValues(alpha: 0.3)
                           ],
                   ),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(20),
-                  ),
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(20)),
                 ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(
-                            Icons.local_florist,
-                            color: Color(0xFFB5627A),
-                            size: 18,
-                          ),
+                          const Icon(Icons.local_florist,
+                              color: Color(0xFFB5627A), size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -1941,24 +2451,20 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                           ),
                           const SizedBox(width: 12),
                           Container(
-                            width: 1,
-                            height: 18,
-                            color: widget.isDarkMode
-                                ? Colors.white24
-                                : Colors.grey.shade300,
-                          ),
+                              width: 1,
+                              height: 18,
+                              color: widget.isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300),
                           const SizedBox(width: 12),
                           Text(
-                            DateFormat(
-                              'd MMMM yyyy',
-                              'tr_TR',
-                            ).format(DateTime.now()),
+                            DateFormat('d MMMM yyyy', 'tr_TR')
+                                .format(DateTime.now()),
                             style: TextStyle(
-                              fontSize: isDesktop ? 16 : 13,
-                              color: widget.isDarkMode
-                                  ? Colors.white54
-                                  : Colors.grey.shade600,
-                            ),
+                                fontSize: isDesktop ? 16 : 13,
+                                color: widget.isDarkMode
+                                    ? Colors.white54
+                                    : Colors.grey.shade600),
                           ),
                         ],
                       ),
@@ -1970,20 +2476,18 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                             : const Color(0xFFE8C4D0).withValues(alpha: 0.5),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: widget.isDarkMode
-                              ? const Color(0xFFF5B7B7).withValues(alpha: 0.3)
-                              : const Color(0xFFB5627A).withValues(alpha: 0.3),
-                          width: 2,
-                        ),
+                            color: widget.isDarkMode
+                                ? const Color(0xFFF5B7B7).withValues(alpha: 0.3)
+                                : const Color(0xFFB5627A)
+                                    .withValues(alpha: 0.3),
+                            width: 2),
                       ),
                       child: IconButton(
-                        icon: Icon(
-                          Icons.settings,
-                          color: widget.isDarkMode
-                              ? const Color(0xFFF5B7B7)
-                              : const Color(0xFFB5627A),
-                          size: 28,
-                        ),
+                        icon: Icon(Icons.settings,
+                            color: widget.isDarkMode
+                                ? const Color(0xFFF5B7B7)
+                                : const Color(0xFFB5627A),
+                            size: 28),
                         onPressed: _ayarlarMenusunuAc,
                       ),
                     ),
@@ -1993,10 +2497,8 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
               Expanded(
                 child: isLoading
                     ? const Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFFB5627A),
-                        ),
-                      )
+                        child:
+                            CircularProgressIndicator(color: Color(0xFFB5627A)))
                     : IndexedStack(
                         index: _aktifSayfaIndex,
                         children: [
@@ -2034,21 +2536,15 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.timer, size: 28),
-            label: '🌸 Ana Sayfa',
-          ),
+              icon: Icon(Icons.timer, size: 28), label: '🌸 Ana Sayfa'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.access_time_filled, size: 28),
-            label: '🌷 Vakitler',
-          ),
+              icon: Icon(Icons.access_time_filled, size: 28),
+              label: '🌷 Vakitler'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.menu_book, size: 28),
-            label: '🌺 Kuran',
-          ),
+              icon: Icon(Icons.menu_book, size: 28), label: '🌺 Kuran'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.compass_calibration, size: 28),
-            label: '🧭 Kıble',
-          ),
+              icon: Icon(Icons.compass_calibration, size: 28),
+              label: '🕋 Kıble'),
         ],
       ),
     );
@@ -2104,10 +2600,8 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
     final isDesktop = screenWidth > 800;
 
     return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(
-        horizontal: isDesktop ? 40 : 16,
-        vertical: 8,
-      ),
+      padding:
+          EdgeInsets.symmetric(horizontal: isDesktop ? 40 : 16, vertical: 8),
       child: Column(
         children: [
           const SizedBox(height: 10),
@@ -2133,20 +2627,19 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                     Text(
                       kalanSure,
                       style: TextStyle(
-                        fontSize: isDesktop ? 42 : 32,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                        color: isDark ? Colors.white : const Color(0xFFB5627A),
-                      ),
+                          fontSize: isDesktop ? 42 : 32,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                          color:
+                              isDark ? Colors.white : const Color(0xFFB5627A)),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       "🌸 Sıradaki: $siradakiVakit",
                       style: TextStyle(
-                        color: const Color(0xFFB5627A),
-                        fontSize: isDesktop ? 18 : 14,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          color: const Color(0xFFB5627A),
+                          fontSize: isDesktop ? 18 : 14,
+                          fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -2167,27 +2660,23 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                 border: Border.all(color: const Color(0xFFB5627A), width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFE8C4D0).withValues(alpha: 0.3),
-                    blurRadius: 10,
-                  ),
+                      color: const Color(0xFFE8C4D0).withValues(alpha: 0.3),
+                      blurRadius: 10)
                 ],
               ),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.celebration,
-                    color: Color(0xFFB5627A),
-                    size: 30,
-                  ),
+                  const Icon(Icons.celebration,
+                      color: Color(0xFFB5627A), size: 30),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       widget.ozelGunMesaji!,
                       style: TextStyle(
-                        fontSize: isDesktop ? 18 : 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : const Color(0xFF4A2E3B),
-                      ),
+                          fontSize: isDesktop ? 18 : 16,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF4A2E3B)),
                     ),
                   ),
                 ],
@@ -2206,9 +2695,8 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                 border: Border.all(color: const Color(0xFFE8C4D0), width: 1.5),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
-                    blurRadius: 10,
-                  ),
+                      color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
+                      blurRadius: 10)
                 ],
               ),
               child: Column(
@@ -2216,89 +2704,60 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                 children: [
                   const Row(
                     children: [
-                      Icon(
-                        Icons.calendar_today,
-                        size: 18,
-                        color: Color(0xFFB5627A),
-                      ),
+                      Icon(Icons.calendar_today,
+                          size: 18, color: Color(0xFFB5627A)),
                       SizedBox(width: 8),
-                      Text(
-                        "🌸 Yaklaşan Özel Gün",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: Color(0xFFB5627A),
-                        ),
-                      ),
+                      Text("🌸 Yaklaşan Özel Gün",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Color(0xFFB5627A))),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    yaklasanOzelGun['ad'],
-                    style: TextStyle(
-                      fontSize: isDesktop ? 18 : 16,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : const Color(0xFF4A2E3B),
-                    ),
-                  ),
+                  Text(yaklasanOzelGun['ad'],
+                      style: TextStyle(
+                          fontSize: isDesktop ? 18 : 16,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF4A2E3B))),
                   const SizedBox(height: 4),
                   Text(
-                    "${yaklasanOzelGun['kalanGun']} gün sonra 🌷",
-                    style: const TextStyle(
-                      color: Color(0xFFB5627A),
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                      yaklasanOzelGun['kalanGunText'] ??
+                          "${yaklasanOzelGun['kalanGun']} gün sonra 🌷",
+                      style: const TextStyle(
+                          color: Color(0xFFB5627A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Text(
-                    yaklasanOzelGun['aciklama'],
-                    style: TextStyle(
-                      color: isDark ? Colors.white70 : Colors.black54,
-                      fontSize: 13,
-                      height: 1.3,
-                    ),
-                  ),
+                  Text(yaklasanOzelGun['aciklama'],
+                      style: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black54,
+                          fontSize: 13,
+                          height: 1.3)),
                 ],
               ),
             ),
           _buyukKarti(
-            "🌷 Günün Ayeti",
-            bugununIcerikleri["ayet"]!,
-            isDesktop,
-            isDark,
-          ),
+              "🌷 Günün Ayeti", bugununIcerikleri["ayet"]!, isDesktop, isDark),
+          const SizedBox(height: 12),
+          _buyukKarti("🌺 Günün Hadisi", bugununIcerikleri["hadis"]!, isDesktop,
+              isDark),
           const SizedBox(height: 12),
           _buyukKarti(
-            "🌺 Günün Hadisi",
-            bugununIcerikleri["hadis"]!,
-            isDesktop,
-            isDark,
-          ),
+              "🦋 Günün Duası", bugununIcerikleri["dua"]!, isDesktop, isDark),
           const SizedBox(height: 12),
           _buyukKarti(
-            "🦋 Günün Duası",
-            bugununIcerikleri["dua"]!,
-            isDesktop,
-            isDark,
-          ),
-          const SizedBox(height: 12),
-          _buyukKarti(
-            "🌸 Günün Esması",
-            bugununIcerikleri["esma"]!,
-            isDesktop,
-            isDark,
-          ),
+              "🌸 Günün Esması", bugununIcerikleri["esma"]!, isDesktop, isDark),
           const SizedBox(height: 20),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
               "🌸 Bu uygulama AYŞE NUR tarafından annesi için hazırlanmıştır 🌸",
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white38 : Colors.black45,
-              ),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.white38 : Colors.black45),
               textAlign: TextAlign.center,
             ),
           ),
@@ -2308,11 +2767,7 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
   }
 
   Widget _buyukKarti(
-    String baslik,
-    String icerik,
-    bool isDesktop,
-    bool isDark,
-  ) {
+      String baslik, String icerik, bool isDesktop, bool isDark) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(isDesktop ? 20 : 14),
@@ -2324,31 +2779,24 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
         border: Border.all(color: const Color(0xFFE8C4D0), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
-            blurRadius: 10,
-          ),
+              color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
+              blurRadius: 10)
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            baslik,
-            style: const TextStyle(
-              color: Color(0xFFB5627A),
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
+          Text(baslik,
+              style: const TextStyle(
+                  color: Color(0xFFB5627A),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16)),
           const SizedBox(height: 8),
-          Text(
-            icerik,
-            style: TextStyle(
-              color: isDark ? Colors.white70 : Colors.black87,
-              fontSize: isDesktop ? 16 : 14,
-              height: 1.4,
-            ),
-          ),
+          Text(icerik,
+              style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black87,
+                  fontSize: isDesktop ? 16 : 14,
+                  height: 1.4)),
         ],
       ),
     );
@@ -2380,7 +2828,7 @@ class VakitlerListeSayfasi extends StatelessWidget {
       "Öğle": 2,
       "İkindi": 3,
       "Akşam": 4,
-      "Yatsı": 5,
+      "Yatsı": 5
     };
     vakitler.sort((a, b) {
       int indexA = sirala[a.key] ?? 99;
@@ -2407,28 +2855,23 @@ class VakitlerListeSayfasi extends StatelessWidget {
                 border: Border.all(color: const Color(0xFFB5627A), width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFE8C4D0).withValues(alpha: 0.3),
-                    blurRadius: 10,
-                  ),
+                      color: const Color(0xFFE8C4D0).withValues(alpha: 0.3),
+                      blurRadius: 10)
                 ],
               ),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.celebration,
-                    color: Color(0xFFB5627A),
-                    size: 30,
-                  ),
+                  const Icon(Icons.celebration,
+                      color: Color(0xFFB5627A), size: 30),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      ozelGunMesaji!,
-                      style: TextStyle(
-                        fontSize: isDesktop ? 18 : 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : const Color(0xFF4A2E3B),
-                      ),
-                    ),
+                    child: Text(ozelGunMesaji!,
+                        style: TextStyle(
+                            fontSize: isDesktop ? 18 : 16,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF4A2E3B))),
                   ),
                 ],
               ),
@@ -2444,9 +2887,8 @@ class VakitlerListeSayfasi extends StatelessWidget {
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: EdgeInsets.symmetric(
-                  horizontal: isDesktop ? 40 : 24,
-                  vertical: isDesktop ? 24 : 18,
-                ),
+                    horizontal: isDesktop ? 40 : 24,
+                    vertical: isDesktop ? 24 : 18),
                 decoration: BoxDecoration(
                   gradient: isCurrent
                       ? LinearGradient(
@@ -2458,8 +2900,7 @@ class VakitlerListeSayfasi extends StatelessWidget {
                               : [
                                   const Color(0xFFF5E6E8),
                                   const Color(0xFFE8C4D0)
-                                ],
-                        )
+                                ])
                       : null,
                   color: isCurrent
                       ? null
@@ -2468,16 +2909,14 @@ class VakitlerListeSayfasi extends StatelessWidget {
                           : Colors.white),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isCurrent
-                        ? const Color(0xFFB5627A)
-                        : (isDark ? Colors.white30 : Colors.grey.shade200),
-                    width: isCurrent ? 2 : 1,
-                  ),
+                      color: isCurrent
+                          ? const Color(0xFFB5627A)
+                          : (isDark ? Colors.white30 : Colors.grey.shade200),
+                      width: isCurrent ? 2 : 1),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
-                      blurRadius: 8,
-                    ),
+                        color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
+                        blurRadius: 8)
                   ],
                 ),
                 child: Row(
@@ -2485,36 +2924,30 @@ class VakitlerListeSayfasi extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(
-                          isCurrent ? Icons.circle : Icons.circle_outlined,
-                          color: isCurrent
-                              ? const Color(0xFFB5627A)
-                              : (isDark ? Colors.white54 : Colors.grey),
-                          size: isDesktop ? 16 : 12,
-                        ),
+                        Icon(isCurrent ? Icons.circle : Icons.circle_outlined,
+                            color: isCurrent
+                                ? const Color(0xFFB5627A)
+                                : (isDark ? Colors.white54 : Colors.grey),
+                            size: isDesktop ? 16 : 12),
                         const SizedBox(width: 12),
-                        Text(
-                          entry.key,
-                          style: TextStyle(
-                            fontSize: isDesktop ? 24 : 20,
+                        Text(entry.key,
+                            style: TextStyle(
+                                fontSize: isDesktop ? 24 : 20,
+                                fontWeight: FontWeight.bold,
+                                color: isCurrent
+                                    ? const Color(0xFFB5627A)
+                                    : (isDark
+                                        ? Colors.white
+                                        : Colors.black87))),
+                      ],
+                    ),
+                    Text(entry.value,
+                        style: TextStyle(
+                            fontSize: isDesktop ? 28 : 24,
                             fontWeight: FontWeight.bold,
                             color: isCurrent
                                 ? const Color(0xFFB5627A)
-                                : (isDark ? Colors.white : Colors.black87),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      entry.value,
-                      style: TextStyle(
-                        fontSize: isDesktop ? 28 : 24,
-                        fontWeight: FontWeight.bold,
-                        color: isCurrent
-                            ? const Color(0xFFB5627A)
-                            : (isDark ? Colors.white70 : Colors.black87),
-                      ),
-                    ),
+                                : (isDark ? Colors.white70 : Colors.black87))),
                   ],
                 ),
               );
@@ -2526,10 +2959,9 @@ class VakitlerListeSayfasi extends StatelessWidget {
           child: Text(
             "🌸 Bu uygulama AYŞE NUR tarafından annesi için hazırlanmıştır 🌸",
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.white38 : Colors.black45,
-            ),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white38 : Colors.black45),
             textAlign: TextAlign.center,
           ),
         ),
