@@ -46,4 +46,7 @@ app.*.map.json
 
 build/
 .dart_tool/
-.gradle/
+.gradle/"build/" 
+".dart_tool/" 
+".gradle/" 
+".idea/" 
