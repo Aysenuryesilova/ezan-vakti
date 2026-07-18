@@ -50,3 +50,13 @@ build/
 ".dart_tool/" 
 ".gradle/" 
 ".idea/" 
+
+   // İmzalandırma ayarları buraya!
+    signingConfigs {
+        create("release") {
+            keyAlias = "upload"
+            keyPassword = "0649.44a58"
+            storeFile = file("upload-keystore.jks")
+            storePassword = "0649.44a58"
+        }
+    }

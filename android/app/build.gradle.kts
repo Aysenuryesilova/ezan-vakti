@@ -26,20 +26,17 @@ android {
         versionName = "3.0"
     }
 
-    // İmzalandırma ayarları buraya!
     signingConfigs {
         create("release") {
+            storeFile = file("upload-keystore.jks")
+            storePassword = "0649.44a58" 
             keyAlias = "upload"
             keyPassword = "0649.44a58"
-            storeFile = file("upload-keystore.jks")
-            storePassword = "0649.44a58"
         }
     }
-
     buildTypes {
-        release {
+        getByName("release") { // "create" değil "getByName" kullan
             signingConfig = signingConfigs.getByName("release")
-            // Kod küçültmeyi (minify) ve kaynak küçültmeyi (shrink) aktif ediyoruz
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

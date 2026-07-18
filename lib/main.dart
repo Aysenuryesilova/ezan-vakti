@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -15,6 +16,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:flutter_compass/flutter_compass.dart';
+import 'package:geolocator/geolocator.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -38,6 +40,17 @@ void main() async {
 
       final isGranted = await Permission.notification.isGranted;
       debugPrint("📢 Bildirim izni verildi mi? $isGranted");
+
+      // 🔧 Vakit bildirimleri zonedSchedule + exactAllowWhileIdle kullanıyor,
+      // bu da Android 12+'ta SCHEDULE_EXACT_ALARM izni gerektiriyor. İzin
+      // yoksa _scheduleSingleNotification içinde inexact moda düşülüyor,
+      // ama önce burada normal şekilde istemeyi deniyoruz.
+      final exactAlarmStatus = await Permission.scheduleExactAlarm.status;
+      if (exactAlarmStatus.isDenied) {
+        await Permission.scheduleExactAlarm.request();
+      }
+      debugPrint(
+          "⏰ Tam zamanlı alarm izni: ${await Permission.scheduleExactAlarm.status}");
 
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -74,26 +87,10 @@ void main() async {
 
         debugPrint("✅ Bildirim kanalları oluşturuldu!");
       }
-
-      if (isGranted) {
-        const AndroidNotificationDetails testDetails =
-            AndroidNotificationDetails(
-          'namaz_vakitleri',
-          'Namaz Vakitleri',
-          importance: Importance.high,
-          priority: Priority.high,
-        );
-        const NotificationDetails testPlatformDetails = NotificationDetails(
-          android: testDetails,
-        );
-        await flutterLocalNotificationsPlugin.show(
-          0,
-          "🌸 Ezan Vakti Test",
-          "Bildirim sistemi çalışıyor! ✅",
-          testPlatformDetails,
-        );
-        debugPrint("✅ Test bildirimi gönderildi!");
-      }
+      // 🔧 KALDIRILDI: Uygulama her açıldığında çıkan "Bildirim sistemi
+      // çalışıyor!" test bildirimi kullanıcı isteği üzerine silindi.
+      // Kanal oluşturma ve izin kontrolü yeterli; ayrıca bir test
+      // bildirimi göstermeye gerek yok.
     } catch (e) {
       debugPrint("❌ Başlangıç bildirim hatası: $e");
     }
@@ -218,58 +215,60 @@ Future<void> showNotification(
   }
 }
 
-Future<void> _ensureSabitChannelReady() async {
-  if (kIsWeb) return;
-
-  final androidImplementation =
-      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-  if (androidImplementation == null) return;
-
-  final izinliMi = await androidImplementation.areNotificationsEnabled();
-  if (izinliMi != true) {
-    await androidImplementation.requestNotificationsPermission();
-  }
-
-  const AndroidNotificationChannel channelSabit = AndroidNotificationChannel(
-    'namaz_vakitleri_sabit',
-    'Sabit Namaz Vakti',
-    description: 'Namaz vaktine kalan süreyi gösterir',
-    importance: Importance.low,
-    playSound: false,
-    enableVibration: false,
-    showBadge: false,
-  );
-  await androidImplementation.createNotificationChannel(channelSabit);
-}
-
-Future<void> updateNotification(String remainingTime, String nextPrayer) async {
+// 🔧 YENİ: Artık sadece "sıradaki vakit" değil, günün TÜM vakitleri üstte,
+// sıradaki vakit (kalan süreyle birlikte) en altta vurgulanmış olarak
+// gösteriliyor. `vakitler` sırayla İmsak→Yatsı olmalı.
+Future<void> updateNotification(
+  String remainingTime,
+  String nextPrayer,
+  Map<String, String> vakitler,
+) async {
   if (kIsWeb) return;
 
   try {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'namaz_vakitleri_sabit',
-      'Sabit Namaz Vakti',
-      importance: Importance.low,
-      priority: Priority.low,
-      ongoing: true,
-      autoCancel: false,
-      playSound: false,
-      enableVibration: false,
-      onlyAlertOnce: true,
-      showWhen: false,
+    // Günün tüm vakitlerini "İmsak 05:12 · Güneş 06:45 · ..." şeklinde,
+    // sıradaki vakti en sona, kalan süreyle birlikte ekliyoruz.
+    const sira = ["Imsak", "Gunes", "Ogle", "Ikindi", "Aksam", "Yatsi"];
+    const gosterimAdi = {
+      "Imsak": "İmsak",
+      "Gunes": "Güneş",
+      "Ogle": "Öğle",
+      "Ikindi": "İkindi",
+      "Aksam": "Akşam",
+      "Yatsi": "Yatsı",
+    };
+    final ustSatir = sira
+        .where((v) => vakitler[v] != null && vakitler[v] != "--:--")
+        .map((v) => "${gosterimAdi[v]} ${vakitler[v]}")
+        .join("  •  ");
+
+    final bigText = BigTextStyleInformation(
+      "$ustSatir\n\n⏰ $nextPrayer vaktine $remainingTime kaldı",
+      contentTitle: "🕌 Bugünün Namaz Vakitleri",
+      summaryText: "Güncelleniyor",
     );
 
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'namaz_vakitleri_sabit',
+        'Sabit Namaz Vakti',
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        autoCancel: false,
+        playSound: false,
+        enableVibration: false,
+        onlyAlertOnce: true,
+        showWhen: false,
+        styleInformation: bigText,
+      ),
     );
 
     await flutterLocalNotificationsPlugin.show(
       999,
-      "⏰ Namaz Vaktine Kalan Süre",
-      "$nextPrayer namazına $remainingTime kaldı",
-      platformChannelSpecifics,
+      "🕌 Bugünün Namaz Vakitleri",
+      "$ustSatir  —  $nextPrayer vaktine $remainingTime kaldı",
+      details,
     );
     debugPrint("✅ Sabit bildirim güncellendi: $remainingTime");
   } catch (e) {
@@ -300,34 +299,120 @@ Future<void> schedulePrayerNotifications(Map<String, String> vakitler) async {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
 
+  // Vakit anahtarlarını, API'den gelenler ile eşleşecek şekilde sabitledik
   final vakitList = [
-    {"ad": "Imsak", "zaman": vakitler["İmsak"]!},
-    {"ad": "Gunes", "zaman": vakitler["Güneş"]!},
-    {"ad": "Ogle", "zaman": vakitler["Öğle"]!},
-    {"ad": "Ikindi", "zaman": vakitler["İkindi"]!},
-    {"ad": "Aksam", "zaman": vakitler["Akşam"]!},
-    {"ad": "Yatsi", "zaman": vakitler["Yatsı"]!},
+    {"ad": "Imsak", "zaman": vakitler["Imsak"] ?? vakitler["İmsak"] ?? "--:--"},
+    {"ad": "Gunes", "zaman": vakitler["Gunes"] ?? vakitler["Güneş"] ?? "--:--"},
+    {"ad": "Ogle", "zaman": vakitler["Ogle"] ?? vakitler["Öğle"] ?? "--:--"},
+    {
+      "ad": "Ikindi",
+      "zaman": vakitler["Ikindi"] ?? vakitler["İkindi"] ?? "--:--"
+    },
+    {"ad": "Aksam", "zaman": vakitler["Aksam"] ?? vakitler["Akşam"] ?? "--:--"},
+    {"ad": "Yatsi", "zaman": vakitler["Yatsi"] ?? vakitler["Yatsı"] ?? "--:--"},
   ];
 
   for (var vakit in vakitList) {
     if (vakit["zaman"] == "--:--") continue;
 
-    final zamanParcalari = vakit["zaman"]!.split(":");
-    final saat = int.parse(zamanParcalari[0]);
-    final dakika = int.parse(zamanParcalari[1]);
+    try {
+      final zamanParcalari = vakit["zaman"]!.split(":");
+      final saat = int.parse(zamanParcalari[0]);
+      final dakika = int.parse(zamanParcalari[1]);
 
-    DateTime vakitZamani =
-        DateTime(today.year, today.month, today.day, saat, dakika);
+      DateTime vakitZamani =
+          DateTime(today.year, today.month, today.day, saat, dakika);
 
-    if (vakitZamani.isBefore(now)) {
-      vakitZamani = vakitZamani.add(const Duration(days: 1));
+      if (vakitZamani.isBefore(now)) {
+        vakitZamani = vakitZamani.add(const Duration(days: 1));
+      }
+
+      await _scheduleSingleNotification(
+          vakitZamani, vakit["ad"]!, vakit["zaman"]!);
+
+      // 🔧 YENİ: "Bildirim çubuğu bir süre sonra duruyor, güncel değil"
+      // sorunu için — sabit/ongoing bildirim SADECE uygulama açıkken
+      // (Timer.periodic ile) güncelleniyordu. Artık her vakit sınırında
+      // (OS'un kendi alarmıyla, uygulama kapalıyken bile) sabit bildirim
+      // içeriği de tazeleniyor. Saniye saniye canlı geri sayım background'da
+      // teknik olarak mümkün değil (bunun için native bir foreground
+      // service gerekir), ama en azından bilgi asla saatlerce bayat kalmıyor.
+      final vakitIndex = vakitList.indexOf(vakit);
+      final sonrakiVakit =
+          vakitIndex < vakitList.length - 1 ? vakitList[vakitIndex + 1] : null;
+      if (sonrakiVakit != null && sonrakiVakit["zaman"] != "--:--") {
+        await _scheduleSabitBarYenile(
+            vakitZamani, sonrakiVakit["ad"]!, vakitler);
+      }
+    } catch (e) {
+      debugPrint("❌ Vakit zamanlama hatası (${vakit["ad"]}): $e");
     }
-
-    await _scheduleSingleNotification(
-        vakitZamani, vakit["ad"]!, vakit["zaman"]!);
   }
-
   debugPrint("✅ Tüm namaz vakitleri zamanlandı!");
+}
+
+// 🔧 YENİ: Sabit/ongoing bildirimi (id 999), uygulama kapalıyken bile her
+// vakit değiştiğinde OS alarmıyla tazeler. Canlı saniye saymaz (bu
+// arka planda mümkün değil) ama en fazla bir sonraki vakte kadar (birkaç
+// saat) bayat kalır — önceden ise saatlerce/gün boyu bayat kalabiliyordu.
+Future<void> _scheduleSabitBarYenile(
+  DateTime zaman,
+  String sonrakiVakitAdi,
+  Map<String, String> vakitler,
+) async {
+  const gosterimAdi = {
+    "Imsak": "İmsak",
+    "Gunes": "Güneş",
+    "Ogle": "Öğle",
+    "Ikindi": "İkindi",
+    "Aksam": "Akşam",
+    "Yatsi": "Yatsı",
+  };
+  const sira = ["Imsak", "Gunes", "Ogle", "Ikindi", "Aksam", "Yatsi"];
+  final ustSatir = sira
+      .where((v) => vakitler[v] != null && vakitler[v] != "--:--")
+      .map((v) => "${gosterimAdi[v]} ${vakitler[v]}")
+      .join("  •  ");
+  final sonrakiSaat = vakitler[sonrakiVakitAdi] ?? "--:--";
+  final sonrakiGosterim = gosterimAdi[sonrakiVakitAdi] ?? sonrakiVakitAdi;
+
+  final tamZamanliIzinVar = await Permission.scheduleExactAlarm.isGranted;
+  final scheduleMode = tamZamanliIzinVar
+      ? AndroidScheduleMode.exactAllowWhileIdle
+      : AndroidScheduleMode.inexactAllowWhileIdle;
+
+  try {
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      999,
+      "🕌 Bugünün Namaz Vakitleri",
+      "$ustSatir  —  Sıradaki: $sonrakiGosterim ($sonrakiSaat)",
+      tz.TZDateTime.from(zaman, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'namaz_vakitleri_sabit',
+          'Sabit Namaz Vakti',
+          importance: Importance.low,
+          priority: Priority.low,
+          ongoing: true,
+          autoCancel: false,
+          playSound: false,
+          enableVibration: false,
+          onlyAlertOnce: true,
+          showWhen: false,
+          styleInformation: BigTextStyleInformation(
+            "$ustSatir\n\n⏰ Sıradaki: $sonrakiGosterim ($sonrakiSaat)",
+            contentTitle: "🕌 Bugünün Namaz Vakitleri",
+          ),
+        ),
+      ),
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+      androidScheduleMode: scheduleMode,
+    );
+  } catch (e) {
+    debugPrint("❌ Sabit bildirim zamanlama hatası: $e");
+  }
 }
 
 Future<void> _scheduleSingleNotification(
@@ -346,6 +431,13 @@ Future<void> _scheduleSingleNotification(
     android: androidDetails,
   );
 
+  // 🔧 Android 14+'ta SCHEDULE_EXACT_ALARM izni yoksa exactAllowWhileIdle
+  // platform hatası fırlatabiliyor. İzin durumuna göre güvenli moda düşüyoruz.
+  final tamZamanliIzinVar = await Permission.scheduleExactAlarm.isGranted;
+  final scheduleMode = tamZamanliIzinVar
+      ? AndroidScheduleMode.exactAllowWhileIdle
+      : AndroidScheduleMode.inexactAllowWhileIdle;
+
   await flutterLocalNotificationsPlugin.zonedSchedule(
     vakitAdi.hashCode,
     "🕌 $vakitAdi Vakti Geldi 🌸",
@@ -355,11 +447,11 @@ Future<void> _scheduleSingleNotification(
     uiLocalNotificationDateInterpretation:
         UILocalNotificationDateInterpretation.absoluteTime,
     matchDateTimeComponents: DateTimeComponents.time,
-    androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    androidScheduleMode: scheduleMode,
   );
 
   debugPrint(
-      "✅ Bildirim zamanlandı: $vakitAdi - ${DateFormat('HH:mm').format(time)}");
+      "✅ Bildirim zamanlandı ($scheduleMode): $vakitAdi - ${DateFormat('HH:mm').format(time)}");
 }
 
 // ==================== EZAN VAKTİ APP ====================
@@ -396,7 +488,28 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       isDarkMode = prefs.getBool('gece_modu') ?? false;
+      _yaziBoyutuOlcegi = prefs.getDouble('yazi_boyutu_olcegi') ?? 1.0;
+      _yaziTipi = prefs.getString('yazi_tipi') ?? 'Schyler';
     });
+  }
+
+  // 🔧 YENİ: Yazı boyutu ve yazı tipi artık uygulama genelinde,
+  // MaterialApp'in `builder`ı üzerinden TEK bir yerden ayarlanıyor. Bu
+  // sayede Ana Sayfa / Vakitler / Kur'an dahil hiçbir sayfanın kendi kodu
+  // değişmeden, isteyen kullanıcı tüm arayüzü büyük yazıyla kullanabiliyor.
+  double _yaziBoyutuOlcegi = 1.0;
+  String _yaziTipi = 'Schyler';
+
+  Future<void> _yaziBoyutunuKaydet(double deger) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('yazi_boyutu_olcegi', deger);
+    setState(() => _yaziBoyutuOlcegi = deger);
+  }
+
+  Future<void> _yaziTipiniKaydet(String deger) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('yazi_tipi', deger);
+    setState(() => _yaziTipi = deger);
   }
 
   @override
@@ -404,13 +517,21 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
     return MaterialApp(
       title: 'Ezan Vakti 🌸',
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(_yaziBoyutuOlcegi),
+          ),
+          child: child!,
+        );
+      },
       theme: ThemeData(
         brightness: isDarkMode ? Brightness.dark : Brightness.light,
         primaryColor:
             isDarkMode ? const Color(0xFF2D1B2E) : const Color(0xFFF5E6E8),
         scaffoldBackgroundColor:
             isDarkMode ? const Color(0xFF1A1118) : const Color(0xFFFDF8F5),
-        fontFamily: 'Schyler',
+        fontFamily: _yaziTipi,
         appBarTheme: AppBarTheme(
           backgroundColor:
               isDarkMode ? const Color(0xFF2D1B2E) : const Color(0xFFFDF8F5),
@@ -463,6 +584,10 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
           await prefs.setBool('gece_modu', val);
         },
         bildirimIzniKaliciRed: _bildirimIzniKaliciRed,
+        yaziBoyutuOlcegi: _yaziBoyutuOlcegi,
+        onYaziBoyutuChanged: _yaziBoyutunuKaydet,
+        yaziTipi: _yaziTipi,
+        onYaziTipiChanged: _yaziTipiniKaydet,
       ),
     );
   }
@@ -515,6 +640,32 @@ class FlowerBackground extends StatelessWidget {
           ),
           child,
         ],
+      ),
+    );
+  }
+}
+
+// ==================== ALT BİLGİ (FOOTER) ====================
+// 🔧 YENİ: Tekrar eden footer metni artık tek bir yerden yönetiliyor.
+// Ana Sayfa / Vakitler / Kur'an sayfaları kasıtlı olarak dokunulmadığı için
+// bu widget SADECE Kıble, Zikirmatik ve Ayarlar gibi diğer sayfalarda
+// kullanılıyor.
+class AltBilgiMetni extends StatelessWidget {
+  final bool isDark;
+  const AltBilgiMetni({super.key, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      child: Text(
+        "🌸 Bu uygulamayı annem 🪷 için tasarladım. 🌸",
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: isDark ? Colors.white38 : Colors.black45,
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -717,8 +868,7 @@ class OzelGunler {
   ];
 
   static List<Map<String, dynamic>> get _tumGunler {
-    // ignore: prefer_const_constructors
-    List<Map<String, dynamic>> all = [];
+    final List<Map<String, dynamic>> all = [];
     all.addAll(_ozelGunler);
     all.addAll(_diniGunler);
     all.addAll(_milliGunler);
@@ -1262,7 +1412,6 @@ class _KuranWebViewState extends State<KuranWebView> {
             ],
           ),
         ),
-        // 🔥 ALT BİLGİ - Kıble hariç her sayfada
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: Text(
@@ -1462,6 +1611,10 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
   ];
   int _seciliZikirIndex = 0;
   String _yeniZikir = "";
+  int _yeniZikirHedefi = 33;
+  // 🔧 YENİ: Her zikrin kendi hedef sayısı olabiliyor artık (zikir metni ->
+  // hedef). Önceden tek bir global hedef tüm zikirler için ortaktı.
+  Map<String, int> _zikirHedefleri = {};
 
   @override
   void initState() {
@@ -1474,14 +1627,24 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList('zikir_listesi');
     final savedIndex = prefs.getInt('secili_zikir_index');
+    final savedHedefler = prefs.getString('zikir_hedefleri_map');
     if (saved != null && saved.isNotEmpty) {
       setState(() {
         _zikirler = saved;
       });
     }
+    if (savedHedefler != null) {
+      try {
+        final decoded = jsonDecode(savedHedefler) as Map<String, dynamic>;
+        setState(() {
+          _zikirHedefleri = decoded.map((k, v) => MapEntry(k, v as int));
+        });
+      } catch (_) {}
+    }
     if (savedIndex != null && savedIndex < _zikirler.length) {
       setState(() {
         _seciliZikirIndex = savedIndex;
+        _hedef = _zikirHedefleri[_zikirler[_seciliZikirIndex]] ?? _hedef;
       });
     }
   }
@@ -1490,6 +1653,7 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('zikir_listesi', _zikirler);
     await prefs.setInt('secili_zikir_index', _seciliZikirIndex);
+    await prefs.setString('zikir_hedefleri_map', jsonEncode(_zikirHedefleri));
   }
 
   Future<void> _sayacYukle() async {
@@ -1508,9 +1672,12 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
 
   void _zikirEkle() {
     if (_yeniZikir.trim().isEmpty) return;
+    final metin = _yeniZikir.trim();
     setState(() {
-      _zikirler.add(_yeniZikir.trim());
+      _zikirler.add(metin);
+      _zikirHedefleri[metin] = _yeniZikirHedefi;
       _yeniZikir = "";
+      _yeniZikirHedefi = 33;
     });
     _zikirleriKaydet();
   }
@@ -1559,355 +1726,418 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
     final isSmallScreen = screenHeight < 700;
 
     return Scaffold(
+      // 🔧 DÜZELTME: Önceki sürümde klavye açılınca (yeni zikir eklerken)
+      // sabit yükseklikli Column taşıyor, "Ekle" butonu diğer elemanlarla
+      // üst üste biniyordu. Tüm içeriği kaydırılabilir yapıp `Expanded`ı
+      // kaldırdık — artık klavye açıldığında sayfa kayıyor, hiçbir şey
+      // üst üste binmiyor.
+      resizeToAvoidBottomInset: true,
       body: FlowerBackground(
         isDark: widget.isDark,
         child: SafeArea(
-          child: Column(
-            children: [
-              // Üst Bar
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: widget.isDark ? Colors.white70 : Colors.black54,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Spacer(),
-                    Text(
-                      "🌸 Zikirmatik",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: widget.isDark
-                            ? Colors.white
-                            : const Color(0xFF4A2E3B),
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(
-                        Icons.refresh,
-                        color: widget.isDark ? Colors.white70 : Colors.black54,
-                      ),
-                      onPressed: _sifirla,
-                    ),
-                  ],
-                ),
-              ),
-              // Hedef Seçici
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: widget.isDark
-                      ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE8C4D0)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      "Hedef:",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle, size: 28),
-                          onPressed: () {
-                            setState(() {
-                              if (_hedef > 1) {
-                                _hedef--;
-                                _sayac = 0;
-                              }
-                            });
-                            _sayacKaydet();
-                          },
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_back,
+                          color:
+                              widget.isDark ? Colors.white70 : Colors.black54,
                         ),
-                        Text(
-                          "$_hedef",
-                          style: const TextStyle(
-                            fontSize: 24,
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const Spacer(),
+                      Flexible(
+                        child: Text(
+                          "\"Ey iman edenler! Allah'ı çok çok zikredin.\"\nAhzab 41",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFB5627A),
+                            color: widget.isDark
+                                ? Colors.white
+                                : const Color(0xFF4A2E3B),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.add_circle, size: 28),
-                          onPressed: () {
-                            setState(() {
-                              if (_hedef < 999) {
-                                _hedef++;
-                                _sayac = 0;
-                              }
-                            });
-                            _sayacKaydet();
-                          },
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(
+                          Icons.refresh,
+                          color:
+                              widget.isDark ? Colors.white70 : Colors.black54,
                         ),
-                      ],
-                    ),
-                  ],
+                        onPressed: _sifirla,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              // Sayaç
-              Expanded(
-                child: Center(
-                  child: Column(
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: widget.isDark
+                        ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE8C4D0)),
+                  ),
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        _zikirler.isNotEmpty
-                            ? _zikirler[_seciliZikirIndex]
-                            : "Zikir ekleyin",
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 22 : 28,
-                          fontWeight: FontWeight.bold,
-                          color: widget.isDark
-                              ? const Color(0xFFF5B7B7)
-                              : const Color(0xFF4A2E3B),
-                        ),
-                        textAlign: TextAlign.center,
+                      const Text(
+                        "Hedef:",
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 16),
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          SizedBox(
-                            width: isSmallScreen ? 160 : 200,
-                            height: isSmallScreen ? 160 : 200,
-                            child: CircularProgressIndicator(
-                              value: _sayac / _hedef,
-                              strokeWidth: isSmallScreen ? 10 : 12,
-                              valueColor: const AlwaysStoppedAnimation(
-                                  Color(0xFFB5627A)),
-                              backgroundColor: widget.isDark
-                                  ? Colors.white10
-                                  : const Color(0xFFE8C4D0)
-                                      .withValues(alpha: 0.3),
-                            ),
-                          ),
-                          Text(
-                            "$_sayac",
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 48 : 64,
-                              fontWeight: FontWeight.bold,
-                              color: widget.isDark
-                                  ? Colors.white
-                                  : const Color(0xFFB5627A),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "/ $_hedef",
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 14 : 18,
-                          color: widget.isDark
-                              ? Colors.white54
-                              : Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      GestureDetector(
-                        onTap: _arttir,
-                        child: Container(
-                          width: isSmallScreen ? 120 : 160,
-                          height: isSmallScreen ? 120 : 160,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                const Color(0xFFB5627A),
-                                const Color(0xFFE8C4D0),
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFB5627A)
-                                    .withValues(alpha: 0.3),
-                                blurRadius: 20,
-                              ),
-                            ],
-                          ),
-                          child: const Center(
-                            child: Text(
-                              "🌸",
-                              style: TextStyle(
-                                fontSize: 50,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
+                      const SizedBox(width: 12),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          ElevatedButton.icon(
-                            onPressed: _sifirla,
-                            icon: const Icon(Icons.restart_alt),
-                            label: const Text("Sifirla"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: widget.isDark
-                                  ? Colors.white24
-                                  : Colors.grey.shade300,
-                              foregroundColor: widget.isDark
-                                  ? Colors.white70
-                                  : Colors.black54,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle, size: 28),
                             onPressed: () {
                               setState(() {
-                                _sayac = _hedef;
+                                if (_hedef > 1) {
+                                  _hedef--;
+                                  _sayac = 0;
+                                  if (_zikirler.isNotEmpty) {
+                                    _zikirHedefleri[
+                                        _zikirler[_seciliZikirIndex]] = _hedef;
+                                  }
+                                }
                               });
                               _sayacKaydet();
+                              _zikirleriKaydet();
                             },
-                            icon: const Icon(Icons.check),
-                            label: const Text("Tamamla"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFE8C4D0),
-                              foregroundColor: const Color(0xFF4A2E3B),
+                          ),
+                          Text(
+                            "$_hedef",
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFB5627A),
                             ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle, size: 28),
+                            onPressed: () {
+                              setState(() {
+                                if (_hedef < 999) {
+                                  _hedef++;
+                                  _sayac = 0;
+                                  if (_zikirler.isNotEmpty) {
+                                    _zikirHedefleri[
+                                        _zikirler[_seciliZikirIndex]] = _hedef;
+                                  }
+                                }
+                              });
+                              _sayacKaydet();
+                              _zikirleriKaydet();
+                            },
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
-              ),
-              // 🔥 Zikir Seçici + Ekleme/Silme - EN ALTA TAŞINDI
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: widget.isDark
-                      ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE8C4D0)),
-                ),
-                child: Column(
+                const SizedBox(height: 12),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Text(
+                      _zikirler.isNotEmpty
+                          ? _zikirler[_seciliZikirIndex]
+                          : "Zikir ekleyin",
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 22 : 28,
+                        fontWeight: FontWeight.bold,
+                        color: widget.isDark
+                            ? const Color(0xFFF5B7B7)
+                            : const Color(0xFF4A2E3B),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Stack(
+                      alignment: Alignment.center,
                       children: [
-                        const Text(
-                          "Zikir:",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                        SizedBox(
+                          width: isSmallScreen ? 160 : 200,
+                          height: isSmallScreen ? 160 : 200,
+                          child: CircularProgressIndicator(
+                            value: _sayac / _hedef,
+                            strokeWidth: isSmallScreen ? 10 : 12,
+                            valueColor:
+                                const AlwaysStoppedAnimation(Color(0xFFB5627A)),
+                            backgroundColor: widget.isDark
+                                ? Colors.white10
+                                : const Color(0xFFE8C4D0)
+                                    .withValues(alpha: 0.3),
+                          ),
                         ),
-                        Expanded(
-                          child: DropdownButton<int>(
-                            value: _seciliZikirIndex,
-                            dropdownColor: widget.isDark
-                                ? const Color(0xFF2D1B2E)
-                                : Colors.white,
-                            style: TextStyle(
-                              color:
-                                  widget.isDark ? Colors.white : Colors.black,
-                            ),
-                            isExpanded: true,
-                            items: _zikirler.asMap().entries.map((entry) {
-                              return DropdownMenuItem(
-                                value: entry.key,
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        entry.value,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.close,
-                                          size: 18, color: Colors.red),
-                                      onPressed: () => _zikirSil(entry.key),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _seciliZikirIndex = value!;
-                                _sayac = 0;
-                              });
-                              _sayacKaydet();
-                              _zikirleriKaydet();
-                            },
+                        Text(
+                          "$_sayac",
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 48 : 64,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDark
+                                ? Colors.white
+                                : const Color(0xFFB5627A),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            onChanged: (value) => _yeniZikir = value,
-                            decoration: InputDecoration(
-                              hintText: "Yeni zikir ekle...",
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              filled: true,
-                              fillColor: widget.isDark
-                                  ? Colors.white.withValues(alpha: 0.05)
-                                  : Colors.grey.shade50,
+                    Text(
+                      "/ $_hedef",
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 14 : 18,
+                        color: widget.isDark
+                            ? Colors.white54
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    GestureDetector(
+                      onTap: _arttir,
+                      child: Container(
+                        width: isSmallScreen ? 120 : 160,
+                        height: isSmallScreen ? 120 : 160,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: const [
+                              Color(0xFFB5627A),
+                              Color(0xFFE8C4D0),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFB5627A)
+                                  .withValues(alpha: 0.3),
+                              blurRadius: 20,
                             ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Text(
+                            "🌸",
                             style: TextStyle(
-                              color:
-                                  widget.isDark ? Colors.white : Colors.black,
+                              fontSize: 50,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _zikirEkle,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _sifirla,
+                          icon: const Icon(Icons.restart_alt),
+                          label: const Text("Sifirla"),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFB5627A),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
+                            backgroundColor: widget.isDark
+                                ? Colors.white24
+                                : Colors.grey.shade300,
+                            foregroundColor:
+                                widget.isDark ? Colors.white70 : Colors.black54,
                           ),
-                          child: const Text("Ekle"),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _sayac = _hedef;
+                            });
+                            _sayacKaydet();
+                          },
+                          icon: const Icon(Icons.check),
+                          label: const Text("Tamamla"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFE8C4D0),
+                            foregroundColor: const Color(0xFF4A2E3B),
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
-              ),
-              // Alt Bilgi
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(
-                  "🌸 Bu uygulama AYSE NUR tarafindan annesi icin hazirlanmistir 🌸",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: widget.isDark ? Colors.white38 : Colors.black45,
+                const SizedBox(height: 12),
+                Container(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: widget.isDark
+                        ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE8C4D0)),
                   ),
-                  textAlign: TextAlign.center,
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Zikir:",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Expanded(
+                            child: DropdownButton<int>(
+                              value: _seciliZikirIndex,
+                              dropdownColor: widget.isDark
+                                  ? const Color(0xFF2D1B2E)
+                                  : Colors.white,
+                              style: TextStyle(
+                                color:
+                                    widget.isDark ? Colors.white : Colors.black,
+                              ),
+                              isExpanded: true,
+                              items: _zikirler.asMap().entries.map((entry) {
+                                return DropdownMenuItem(
+                                  value: entry.key,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          entry.value,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.close,
+                                            size: 18, color: Colors.red),
+                                        onPressed: () => _zikirSil(entry.key),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _seciliZikirIndex = value!;
+                                  _sayac = 0;
+                                  _hedef = _zikirHedefleri[
+                                          _zikirler[_seciliZikirIndex]] ??
+                                      33;
+                                });
+                                _sayacKaydet();
+                                _zikirleriKaydet();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              onChanged: (value) => _yeniZikir = value,
+                              decoration: InputDecoration(
+                                hintText: "Yeni zikir ekle...",
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                filled: true,
+                                fillColor: widget.isDark
+                                    ? Colors.white.withValues(alpha: 0.05)
+                                    : Colors.grey.shade50,
+                              ),
+                              style: TextStyle(
+                                color:
+                                    widget.isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _zikirEkle,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFB5627A),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                            ),
+                            child: const Text("Ekle"),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // 🔧 YENİ: Eklenecek zikrin hedef sayısı artık ayrı bir
+                      // hücrede, ekleme kutusunun hemen altında belirleniyor.
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: widget.isDark
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: widget.isDark
+                                ? Colors.white24
+                                : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Yeni zikrin hedefi:",
+                                style: TextStyle(fontSize: 13)),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove, size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      if (_yeniZikirHedefi > 1)
+                                        _yeniZikirHedefi--;
+                                    });
+                                  },
+                                ),
+                                Text("$_yeniZikirHedefi",
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFFB5627A))),
+                                IconButton(
+                                  icon: const Icon(Icons.add, size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      if (_yeniZikirHedefi < 999)
+                                        _yeniZikirHedefi++;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                AltBilgiMetni(isDark: widget.isDark),
+              ],
+            ),
           ),
         ),
       ),
@@ -1927,24 +2157,112 @@ class KiblePusulasi extends StatefulWidget {
 
 class _KiblePusulasiState extends State<KiblePusulasi> {
   double _heading = 0.0;
-  double _kibleAcisi = 154.0;
   bool _pusulaVar = true;
 
-  final Map<String, double> _sehirKibleAcisi = {
-    "Mus": 154.0,
-    "Balikesir": 168.0,
-    "Malatya": 168.0,
-    "Sivas": 163.0,
-    "Ankara": 167.0,
-    "Istanbul": 168.0,
-    "Izmir": 170.0,
-    "Bursa": 168.0,
-    "Konya": 165.0,
-    "Antalya": 166.0,
-    "Diyarbakir": 158.0,
-    "Gaziantep": 162.0,
-    "Mersin": 164.0,
+  // 🔧 YENİ: Önceki sürümde sadece 13 şehir için elle girilmiş, coğrafi
+  // olarak hatalı bir açı tablosu vardı ve bilinmeyen şehirler sessizce
+  // "Mus" açısına düşüyordu. Artık 81 ilin gerçek enlem/boylam'ı ile
+  // büyük daire (great-circle bearing) formülü kullanılıyor — her il için
+  // doğru sonuç verir.
+  final Map<String, List<double>> _ilKoordinat = {
+    "Adana": [37.0, 35.3213333],
+    "Adiyaman": [37.7641667, 38.2761667],
+    "Afyonkarahisar": [38.76376, 30.54034],
+    "Agri": [39.7216667, 43.0566667],
+    "Amasya": [40.65, 35.8333333],
+    "Ankara": [39.92077, 32.85411],
+    "Antalya": [36.88414, 30.70563],
+    "Artvin": [41.1833333, 41.8166667],
+    "Aydin": [37.8444, 27.8458],
+    "Balikesir": [39.648369, 27.8826100],
+    "Bilecik": [40.150131, 29.983061],
+    "Bingol": [38.8853490, 40.4982910],
+    "Bitlis": [38.4, 42.1166667],
+    "Bolu": [40.7394790, 31.6115610],
+    "Burdur": [37.7269090, 30.2888760],
+    "Bursa": [40.18257, 29.06687],
+    "Canakkale": [40.1553120, 26.4141600],
+    "Cankiri": [40.6, 33.6166667],
+    "Corum": [40.5505556, 34.9555556],
+    "Denizli": [37.77652, 29.08639],
+    "Diyarbakir": [37.91441, 40.2306290],
+    "Edirne": [41.6666667, 26.5666667],
+    "Elazig": [38.680969, 39.226398],
+    "Erzincan": [39.75, 39.5],
+    "Erzurum": [39.9043189, 41.2678853],
+    "Eskisehir": [39.784302, 30.51922],
+    "Gaziantep": [37.06622, 37.38332],
+    "Giresun": [40.912811, 38.38953],
+    "Gumushane": [40.4602778, 39.4813889],
+    "Hakkari": [37.5833333, 43.7333333],
+    "Hatay": [36.4018488, 36.3498097],
+    "Isparta": [37.7666667, 30.55],
+    "Mersin": [36.8, 34.6333333],
+    "Istanbul": [41.00527, 28.97696],
+    "Izmir": [38.41885, 27.12872],
+    "Kars": [40.59267, 43.077831],
+    "Kastamonu": [41.38871, 33.78273],
+    "Kayseri": [38.7333333, 35.4833333],
+    "Kirklareli": [41.7333333, 27.2166667],
+    "Kirsehir": [39.15, 34.1666667],
+    "Kocaeli": [40.8532704, 29.8815203],
+    "Konya": [37.8666667, 32.4833333],
+    "Kutahya": [39.4166667, 29.9833333],
+    "Malatya": [38.35519, 38.30946],
+    "Manisa": [38.619099, 27.428921],
+    "Kahramanmaras": [37.5833333, 36.9333333],
+    "Mardin": [37.3122361, 40.7351120],
+    "Mugla": [37.2152778, 28.3636111],
+    "Mus": [38.7432926, 41.5064823],
+    "Nevsehir": [38.62442, 34.723969],
+    "Nigde": [37.9666667, 34.6833333],
+    "Ordu": [40.9833333, 37.8833333],
+    "Rize": [41.02005, 40.523449],
+    "Sakarya": [40.7568793, 30.378138],
+    "Samsun": [41.292782, 36.33128],
+    "Siirt": [37.94429, 41.93288],
+    "Sinop": [42.0264222, 35.1550745],
+    "Sivas": [39.747662, 37.017879],
+    "Tekirdag": [40.9833333, 27.5166667],
+    "Tokat": [40.3166667, 36.55],
+    "Trabzon": [41.0, 39.7333333],
+    "Tunceli": [39.1079868, 39.5401672],
+    "Sanliurfa": [37.15, 38.8],
+    "Usak": [38.682301, 29.40819],
+    "Van": [38.4941667, 43.38],
+    "Yozgat": [39.82, 34.8044444],
+    "Zonguldak": [41.456409, 31.798731],
+    "Aksaray": [38.36869, 34.03698],
+    "Bayburt": [40.255169, 40.22488],
+    "Karaman": [37.17593, 33.228748],
+    "Kirikkale": [39.846821, 33.515251],
+    "Batman": [37.881168, 41.13509],
+    "Sirnak": [37.5163889, 42.4611111],
+    "Bartin": [41.6344444, 32.3375],
+    "Ardahan": [41.110481, 42.702171],
+    "Igdir": [39.9166667, 44.0333333],
+    "Yalova": [40.65, 29.2666667],
+    "Karabuk": [41.2, 32.6333333],
+    "Kilis": [36.718399, 37.12122],
+    "Osmaniye": [37.06805, 36.261589],
+    "Duzce": [40.843849, 31.15654],
   };
+
+  // Kabe'nin koordinatları (sabit)
+  static const double _kabeLat = 21.4225;
+  static const double _kabeLon = 39.8262;
+
+  double _kibleAcisi = 154.0;
+  String? _manuelIl; // Kullanıcının bu sayfaya özel elle seçtiği il (varsa)
+  String _kayitliSehir = "Mus"; // Uygulamanın genelinde seçili olan şehir
+
+  // 🔧 YENİ: GPS ile bulunan gerçek konum + Aladhan'ın ücretsiz Kıble API'si
+  // (https://api.aladhan.com/v1/qibla/{lat}/{lon}) — kendi hesaplamamız
+  // yerine bilinen, güvenilir bir kaynağın sonucunu kullanıyoruz.
+  String _konumKaynagi = "kayitli"; // "gps" | "kayitli" | "manuel"
+  int? _gpsDogrulukYildizi; // GPS konum hassasiyetine göre 1-5 yıldız
+  bool _gpsYukleniyor = false;
+  String? _gpsHata;
 
   Stream<dynamic>? _compassStream;
 
@@ -1952,6 +2270,190 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
   void initState() {
     super.initState();
     _pusulaKontrol();
+    _konumBilgisiniYukle();
+  }
+
+  // 🔧 YENİ: Büyük daire (great-circle) formülüyle iki koordinat arasındaki
+  // yön açısını (bearing) derece cinsinden hesaplar. SADECE GPS/API
+  // ulaşılamadığında (internetsizken) yedek olarak kullanılıyor; asıl
+  // kaynak Aladhan'ın kendi Kıble API'si.
+  double _bearingHesapla(double lat1, double lon1, double lat2, double lon2) {
+    final phi1 = lat1 * math.pi / 180;
+    final phi2 = lat2 * math.pi / 180;
+    final deltaLambda = (lon2 - lon1) * math.pi / 180;
+    final y = math.sin(deltaLambda) * math.cos(phi2);
+    final x = math.cos(phi1) * math.sin(phi2) -
+        math.sin(phi1) * math.cos(phi2) * math.cos(deltaLambda);
+    final theta = math.atan2(y, x);
+    return (theta * 180 / math.pi + 360) % 360;
+  }
+
+  // GPS konum hassasiyeti (metre) → yıldız. Tek bir "API" kıbleyi başka
+  // bir API'den daha "doğru" göstermez (ikisi de aynı matematiği kullanır);
+  // gerçek fark GPS sinyalinin hassasiyetinden gelir, o yüzden yıldızı
+  // buna göre veriyoruz.
+  int _dogrulukYildizHesapla(double metreDogruluk) {
+    if (metreDogruluk <= 10) return 5;
+    if (metreDogruluk <= 25) return 4;
+    if (metreDogruluk <= 50) return 3;
+    if (metreDogruluk <= 100) return 2;
+    return 1;
+  }
+
+  Future<void> _gpsIleKibleBul() async {
+    setState(() {
+      _gpsYukleniyor = true;
+      _gpsHata = null;
+    });
+    try {
+      // 1) Konum servisleri açık mı?
+      final servisAcik = await Geolocator.isLocationServiceEnabled();
+      if (!servisAcik) {
+        setState(() {
+          _gpsHata =
+              "Konum servisleri kapalı. Lütfen telefon ayarlarından açın.";
+          _gpsYukleniyor = false;
+        });
+        return;
+      }
+
+      // 2) Konum izni iste
+      var izin = await Geolocator.checkPermission();
+      if (izin == LocationPermission.denied) {
+        izin = await Geolocator.requestPermission();
+      }
+      if (izin == LocationPermission.denied ||
+          izin == LocationPermission.deniedForever) {
+        setState(() {
+          _gpsHata = "Konum izni verilmedi.";
+          _gpsYukleniyor = false;
+        });
+        return;
+      }
+
+      // 3) Gerçek GPS konumunu al
+      final konum = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      double aci;
+      try {
+        // 4) Aladhan'ın ücretsiz Kıble API'sinden yön açısını al (kendi
+        // hesaplamamızı değil, bilinen bir servisi kullanıyoruz).
+        final yanit = await http.get(Uri.parse(
+            'https://api.aladhan.com/v1/qibla/${konum.latitude}/${konum.longitude}'));
+        final veri = jsonDecode(yanit.body);
+        aci = (veri['data']['direction'] as num).toDouble();
+      } catch (_) {
+        // İnternet yoksa yerel hesaplamaya düş (yine doğru, sadece
+        // API'den doğrulanmamış).
+        aci = _bearingHesapla(
+            konum.latitude, konum.longitude, _kabeLat, _kabeLon);
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('kible_manuel_il');
+
+      setState(() {
+        _kibleAcisi = aci;
+        _konumKaynagi = "gps";
+        _manuelIl = null;
+        _gpsDogrulukYildizi = _dogrulukYildizHesapla(konum.accuracy);
+        _gpsYukleniyor = false;
+      });
+    } catch (e) {
+      setState(() {
+        _gpsHata = "Konum alınamadı: $e";
+        _gpsYukleniyor = false;
+      });
+    }
+  }
+
+  void _kibleAcisiniGuncelle(String il) {
+    final koordinat = _ilKoordinat[il];
+    if (koordinat == null) return;
+    setState(() {
+      _kibleAcisi =
+          _bearingHesapla(koordinat[0], koordinat[1], _kabeLat, _kabeLon);
+    });
+  }
+
+  Future<void> _konumBilgisiniYukle() async {
+    final prefs = await SharedPreferences.getInstance();
+    final kayitli = prefs.getString('secilen_sehir') ?? "Mus";
+    final manuel = prefs.getString('kible_manuel_il');
+    setState(() {
+      _kayitliSehir = _ilKoordinat.containsKey(kayitli) ? kayitli : "Mus";
+      _manuelIl =
+          (manuel != null && _ilKoordinat.containsKey(manuel)) ? manuel : null;
+    });
+    _kibleAcisiniGuncelle(_manuelIl ?? _kayitliSehir);
+  }
+
+  // "Mevcut konumumu kullan": uygulamanın Vakitler sayfasında seçili olan
+  // kayıtlı şehre döner (manuel/GPS geçersiz kılmayı sıfırlar/nulldurur).
+  Future<void> _kayitliKonumuKullan() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('kible_manuel_il');
+    setState(() {
+      _manuelIl = null;
+      _konumKaynagi = "kayitli";
+      _gpsDogrulukYildizi = null;
+      _gpsHata = null;
+    });
+    _kibleAcisiniGuncelle(_kayitliSehir);
+  }
+
+  Future<void> _manuelIlSec(String il) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('kible_manuel_il', il);
+    setState(() {
+      _manuelIl = il;
+      _konumKaynagi = "manuel";
+      _gpsDogrulukYildizi = null;
+      _gpsHata = null;
+    });
+    _kibleAcisiniGuncelle(il);
+  }
+
+  void _manuelIlSeciciyiGoster() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: widget.isDark ? const Color(0xFF2D1B2E) : Colors.white,
+        title: const Text("🌸 Şehir Seç",
+            style: TextStyle(
+                color: Color(0xFFB5627A), fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: ListView(
+            children: (_ilKoordinat.keys.toList()..sort()).map((il) {
+              return ListTile(
+                title: Text(il),
+                trailing: (il == (_manuelIl ?? _kayitliSehir))
+                    ? const Icon(Icons.check, color: Color(0xFFB5627A))
+                    : null,
+                onTap: () {
+                  _manuelIlSec(il);
+                  Navigator.pop(context);
+                },
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child:
+                const Text("Kapat", style: TextStyle(color: Color(0xFFB5627A))),
+          ),
+        ],
+      ),
+    );
   }
 
   void _pusulaKontrol() {
@@ -2027,46 +2529,170 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                   ],
                 ),
               ),
-              if (!_pusulaVar)
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.sensor_occupied,
-                          size: 60,
-                          color:
-                              widget.isDark ? Colors.white54 : Colors.black54,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Pusula sensörü bulunamadi.\nTelefonunuz pusula destegi sunmuyor olabilir.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color:
-                                widget.isDark ? Colors.white70 : Colors.black54,
+              // 🔧 YENİ: Konum kaynağı seçimi — kayıtlı şehri kullan, elle
+              // farklı bir şehir seç, ya da manuel seçimi sıfırla.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: widget.isDark
+                        ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE8C4D0)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.location_on,
+                              size: 18,
+                              color: widget.isDark
+                                  ? const Color(0xFFF5B7B7)
+                                  : const Color(0xFFB5627A)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _konumKaynagi == "gps"
+                                  ? "Konum: GPS (canlı)"
+                                  : "Konum: ${_manuelIl ?? _kayitliSehir}"
+                                      "${_konumKaynagi == 'manuel' ? ' (manuel)' : ' (kayıtlı)'}",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: widget.isDark
+                                    ? Colors.white
+                                    : const Color(0xFF4A2E3B),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
+                          if (_gpsDogrulukYildizi != null)
+                            Row(
+                              children: List.generate(
+                                5,
+                                (i) => Icon(
+                                  i < _gpsDogrulukYildizi!
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  size: 14,
+                                  color: const Color(0xFFB5627A),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (_gpsHata != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(_gpsHata!,
+                              style: const TextStyle(
+                                  color: Colors.red, fontSize: 12)),
                         ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _pusulaVar = true;
-                            });
-                            _pusulaKontrol();
-                          },
+                      const SizedBox(height: 8),
+                      // 🔧 YENİ: GPS ile gerçek konumu bul (Aladhan Kıble
+                      // API'si kullanılıyor) — birincil ve önerilen yöntem.
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _gpsYukleniyor ? null : _gpsIleKibleBul,
+                          icon: _gpsYukleniyor
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.gps_fixed, size: 18),
+                          label: Text(_gpsYukleniyor
+                              ? "Konum bulunuyor..."
+                              : "📍 Konumumu Bul (GPS)"),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFB5627A),
                             foregroundColor: Colors.white,
                           ),
-                          child: const Text("Yeniden Dene 🌸"),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _manuelIlSeciciyiGoster,
+                              icon:
+                                  const Icon(Icons.edit_location_alt, size: 18),
+                              label: const Text("Şehir Seç"),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFB5627A),
+                                side:
+                                    const BorderSide(color: Color(0xFFB5627A)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _konumKaynagi == "kayitli"
+                                  ? null
+                                  : _kayitliKonumuKullan,
+                              icon: const Icon(Icons.restart_alt, size: 18),
+                              label: const Text("Sıfırla"),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: widget.isDark
+                                    ? Colors.white70
+                                    : Colors.black54,
+                                side: BorderSide(
+                                    color: widget.isDark
+                                        ? Colors.white24
+                                        : Colors.black26),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.sensor_occupied,
+                        size: 60,
+                        color: widget.isDark ? Colors.white54 : Colors.black54,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        "Pusula sensörü bulunamadi.\nTelefonunuz pusula destegi sunmuyor olabilir.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color:
+                              widget.isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _pusulaVar = true;
+                          });
+                          _pusulaKontrol();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFB5627A),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text("Yeniden Dene 🌸"),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               if (_pusulaVar)
                 Expanded(
                   child: StreamBuilder(
@@ -2216,15 +2842,7 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                 ),
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(
-                  "🌸 Bu uygulama AYSE NUR tarafindan annesi icin hazirlanmistir 🌸",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: widget.isDark ? Colors.white38 : Colors.black45,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                child: AltBilgiMetni(isDark: widget.isDark),
               ),
             ],
           ),
@@ -2239,12 +2857,20 @@ class AnaSayfaGezgini extends StatefulWidget {
   final bool isDarkMode;
   final ValueChanged<bool> onThemeChanged;
   final bool bildirimIzniKaliciRed;
+  final double yaziBoyutuOlcegi;
+  final ValueChanged<double> onYaziBoyutuChanged;
+  final String yaziTipi;
+  final ValueChanged<String> onYaziTipiChanged;
 
   const AnaSayfaGezgini({
     super.key,
     required this.isDarkMode,
     required this.onThemeChanged,
     required this.bildirimIzniKaliciRed,
+    required this.yaziBoyutuOlcegi,
+    required this.onYaziBoyutuChanged,
+    required this.yaziTipi,
+    required this.onYaziTipiChanged,
   });
 
   @override
@@ -2259,82 +2885,1073 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   List<dynamic> aylikVeriHavuzu = [];
 
   final Map<String, List<String>> _ilIlceMap = {
-    "Mus": ["Merkez", "Bulanik", "Haskoy", "Korkut", "Malazgirt", "Varto"],
-    "Balikesir": [
+    "Adana": [
+      "Aladag",
+      "Ceyhan",
+      "Cukurova",
+      "Feke",
+      "Imamoglu",
+      "Karaisali",
+      "Karatas",
+      "Kozan",
+      "Pozanti",
+      "Saimbeyli",
+      "Saricam",
+      "Seyhan",
+      "Tufanbeyli",
+      "Yumurtalik",
+      "Yuregir"
+    ],
+    "Adiyaman": [
       "Merkez",
+      "Besni",
+      "Celikhan",
+      "Gerger",
+      "Golbasi",
+      "Kahta",
+      "Samsat",
+      "Sincik",
+      "Tut"
+    ],
+    "Afyonkarahisar": [
+      "Merkez",
+      "Basmakci",
+      "Bayat",
+      "Bolvadin",
+      "Cay",
+      "Cobanlar",
+      "Dazkiri",
+      "Dinar",
+      "Emirdag",
+      "Evciler",
+      "Hocalar",
+      "Ihsaniye",
+      "Iscehisar",
+      "Kiziloren",
+      "Sandikli",
+      "Sinanpasa",
+      "Suhut",
+      "Sultandagi"
+    ],
+    "Agri": [
+      "Merkez",
+      "Diyadin",
+      "Dogubayazit",
+      "Eleskirt",
+      "Hamur",
+      "Patnos",
+      "Taslicay",
+      "Tutak"
+    ],
+    "Amasya": [
+      "Merkez",
+      "Goynucek",
+      "Gumushacikoy",
+      "Hamamozu",
+      "Merzifon",
+      "Suluova",
+      "Tasova"
+    ],
+    "Ankara": [
+      "Akyurt",
+      "Altindag",
+      "Ayas",
+      "Bala",
+      "Beypazari",
+      "Camlidere",
+      "Cankaya",
+      "Cubuk",
+      "Elmadag",
+      "Etimesgut",
+      "Evren",
+      "Golbasi",
+      "Gudul",
+      "Haymana",
+      "Kahramankazan",
+      "Kalecik",
+      "Kecioren",
+      "Kizilcahamam",
+      "Mamak",
+      "Nallihan",
+      "Polatli",
+      "Pursaklar",
+      "Sereflikochisar",
+      "Sincan",
+      "Yenimahalle"
+    ],
+    "Antalya": [
+      "Akseki",
+      "Aksu",
+      "Alanya",
+      "Demre",
+      "Dosemealti",
+      "Elmali",
+      "Finike",
+      "Gazipasa",
+      "Gundogmus",
+      "Ibradi",
+      "Kas",
+      "Kemer",
+      "Kepez",
+      "Konyaalti",
+      "Korkuteli",
+      "Kumluca",
+      "Manavgat",
+      "Muratpasa",
+      "Serik"
+    ],
+    "Artvin": [
+      "Merkez",
+      "Ardanuc",
+      "Arhavi",
+      "Borcka",
+      "Hopa",
+      "Kemalpasa",
+      "Murgul",
+      "Savsat",
+      "Yusufeli"
+    ],
+    "Aydin": [
+      "Bozdogan",
+      "Buharkent",
+      "Cine",
+      "Didim",
+      "Efeler",
+      "Germencik",
+      "Incirliova",
+      "Karacasu",
+      "Karpuzlu",
+      "Kocarli",
+      "Kosk",
+      "Kusadasi",
+      "Kuyucak",
+      "Nazilli",
+      "Soke",
+      "Sultanhisar",
+      "Yenipazar"
+    ],
+    "Balikesir": [
       "Altieylul",
       "Ayvalik",
+      "Balya",
       "Bandirma",
+      "Bigadic",
+      "Burhaniye",
+      "Dursunbey",
+      "Edremit",
+      "Erdek",
+      "Gomec",
       "Gonen",
-      "Edremit"
+      "Havran",
+      "Ivrindi",
+      "Karesi",
+      "Kepsut",
+      "Manyas",
+      "Marmara",
+      "Savastepe",
+      "Sindirgi",
+      "Susurluk"
+    ],
+    "Bilecik": [
+      "Merkez",
+      "Bozuyuk",
+      "Golpazari",
+      "Inhisar",
+      "Osmaneli",
+      "Pazaryeri",
+      "Sogut",
+      "Yenipazar"
+    ],
+    "Bingol": [
+      "Merkez",
+      "Adakli",
+      "Genc",
+      "Karliova",
+      "Kigi",
+      "Solhan",
+      "Yayladere",
+      "Yedisu"
+    ],
+    "Bitlis": [
+      "Merkez",
+      "Adilcevaz",
+      "Ahlat",
+      "Guroymak",
+      "Hizan",
+      "Mutki",
+      "Tatvan"
+    ],
+    "Bolu": [
+      "Merkez",
+      "Dortdivan",
+      "Gerede",
+      "Goynuk",
+      "Kibriscik",
+      "Mengen",
+      "Mudurnu",
+      "Seben",
+      "Yenicaga"
+    ],
+    "Burdur": [
+      "Merkez",
+      "Aglasun",
+      "Altinyayla",
+      "Bucak",
+      "Cavdir",
+      "Celtikci",
+      "Golhisar",
+      "Karamanli",
+      "Kemer",
+      "Tefenni",
+      "Yesilova"
+    ],
+    "Bursa": [
+      "Buyukorhan",
+      "Gemlik",
+      "Gursu",
+      "Harmancik",
+      "Inegol",
+      "Iznik",
+      "Karacabey",
+      "Keles",
+      "Kestel",
+      "Mudanya",
+      "Mustafakemalpasa",
+      "Nilufer",
+      "Orhaneli",
+      "Orhangazi",
+      "Osmangazi",
+      "Yenisehir",
+      "Yildirim"
+    ],
+    "Canakkale": [
+      "Merkez",
+      "Ayvacik",
+      "Bayramic",
+      "Biga",
+      "Bozcaada",
+      "Can",
+      "Eceabat",
+      "Ezine",
+      "Gelibolu",
+      "Gokceada",
+      "Lapseki",
+      "Yenice"
+    ],
+    "Cankiri": [
+      "Merkez",
+      "Atkaracalar",
+      "Bayramoren",
+      "Cerkes",
+      "Eldivan",
+      "Ilgaz",
+      "Kizilirmak",
+      "Korgun",
+      "Kursunlu",
+      "Orta",
+      "Sabanozu",
+      "Yaprakli"
+    ],
+    "Corum": [
+      "Merkez",
+      "Alaca",
+      "Bayat",
+      "Bogazkale",
+      "Dodurga",
+      "Iskilip",
+      "Kargi",
+      "Lacin",
+      "Mecitozu",
+      "Oguzlar",
+      "Ortakoy",
+      "Osmancik",
+      "Sungurlu",
+      "Ugurludag"
+    ],
+    "Denizli": [
+      "Acipayam",
+      "Babadag",
+      "Baklan",
+      "Bekilli",
+      "Beyagac",
+      "Bozkurt",
+      "Buldan",
+      "Cal",
+      "Cameli",
+      "Cardak",
+      "Civril",
+      "Guney",
+      "Honaz",
+      "Kale",
+      "Merkezefendi",
+      "Pamukkale",
+      "Saraykoy",
+      "Serinhisar",
+      "Tavas"
+    ],
+    "Diyarbakir": [
+      "Baglar",
+      "Bismil",
+      "Cermik",
+      "Cinar",
+      "Cungus",
+      "Dicle",
+      "Egil",
+      "Ergani",
+      "Hani",
+      "Hazro",
+      "Kayapinar",
+      "Kocakoy",
+      "Kulp",
+      "Lice",
+      "Silvan",
+      "Sur",
+      "Yenisehir"
+    ],
+    "Edirne": [
+      "Merkez",
+      "Enez",
+      "Havsa",
+      "Ipsala",
+      "Kesan",
+      "Lalapasa",
+      "Meric",
+      "Suloglu",
+      "Uzunkopru"
+    ],
+    "Elazig": [
+      "Merkez",
+      "Agin",
+      "Alacakaya",
+      "Aricak",
+      "Baskil",
+      "Karakocan",
+      "Keban",
+      "Kovancilar",
+      "Maden",
+      "Palu",
+      "Sivrice"
+    ],
+    "Erzincan": [
+      "Merkez",
+      "Cayirli",
+      "Ilic",
+      "Kemah",
+      "Kemaliye",
+      "Otlukbeli",
+      "Refahiye",
+      "Tercan",
+      "Uzumlu"
+    ],
+    "Erzurum": [
+      "Askale",
+      "Aziziye",
+      "Cat",
+      "Hinis",
+      "Horasan",
+      "Ispir",
+      "Karacoban",
+      "Karayazi",
+      "Koprukoy",
+      "Narman",
+      "Oltu",
+      "Olur",
+      "Palandoken",
+      "Pasinler",
+      "Pazaryolu",
+      "Senkaya",
+      "Tekman",
+      "Tortum",
+      "Uzundere",
+      "Yakutiye"
+    ],
+    "Eskisehir": [
+      "Alpu",
+      "Beylikova",
+      "Cifteler",
+      "Gunyuzu",
+      "Han",
+      "Inonu",
+      "Mahmudiye",
+      "Mihalgazi",
+      "Mihaliccik",
+      "Odunpazari",
+      "Saricakaya",
+      "Seyitgazi",
+      "Sivrihisar",
+      "Tepebasi"
+    ],
+    "Gaziantep": [
+      "Araban",
+      "Islahiye",
+      "Karkamis",
+      "Nizip",
+      "Nurdagi",
+      "Oguzeli",
+      "Sahinbey",
+      "Sehitkamil",
+      "Yavuzeli"
+    ],
+    "Giresun": [
+      "Merkez",
+      "Alucra",
+      "Bulancak",
+      "Camoluk",
+      "Canakci",
+      "Dereli",
+      "Dogankent",
+      "Espiye",
+      "Eynesil",
+      "Gorele",
+      "Guce",
+      "Kesap",
+      "Piraziz",
+      "Sebinkarahisar",
+      "Tirebolu",
+      "Yaglidere"
+    ],
+    "Gumushane": ["Merkez", "Kelkit", "Kose", "Kurtun", "Siran", "Torul"],
+    "Hakkari": ["Merkez", "Cukurca", "Derecik", "Semdinli", "Yuksekova"],
+    "Hatay": [
+      "Altinozu",
+      "Antakya",
+      "Arsuz",
+      "Belen",
+      "Defne",
+      "Dortyol",
+      "Erzin",
+      "Hassa",
+      "Iskenderun",
+      "Kirikhan",
+      "Kumlu",
+      "Payas",
+      "Reyhanli",
+      "Samandag",
+      "Yayladagi"
+    ],
+    "Isparta": [
+      "Merkez",
+      "Aksu",
+      "Atabey",
+      "Egirdir",
+      "Gelendost",
+      "Gonen",
+      "Keciborlu",
+      "Sarkikaraagac",
+      "Senirkent",
+      "Sutculer",
+      "Uluborlu",
+      "Yalvac",
+      "Yenisarbademli"
+    ],
+    "Mersin": [
+      "Akdeniz",
+      "Anamur",
+      "Aydincik",
+      "Bozyazi",
+      "Camliyayla",
+      "Erdemli",
+      "Gulnar",
+      "Mezitli",
+      "Mut",
+      "Silifke",
+      "Tarsus",
+      "Toroslar",
+      "Yenisehir"
+    ],
+    "Istanbul": [
+      "Adalar",
+      "Arnavutkoy",
+      "Atasehir",
+      "Avcilar",
+      "Bagcilar",
+      "Bahcelievler",
+      "Bakirkoy",
+      "Basaksehir",
+      "Bayrampasa",
+      "Besiktas",
+      "Beykoz",
+      "Beylikduzu",
+      "Beyoglu",
+      "Buyukcekmece",
+      "Catalca",
+      "Cekmekoy",
+      "Esenler",
+      "Esenyurt",
+      "Eyupsultan",
+      "Fatih",
+      "Gaziosmanpasa",
+      "Gungoren",
+      "Kadikoy",
+      "Kagithane",
+      "Kartal",
+      "Kucukcekmece",
+      "Maltepe",
+      "Pendik",
+      "Sancaktepe",
+      "Sariyer",
+      "Sile",
+      "Silivri",
+      "Sisli",
+      "Sultanbeyli",
+      "Sultangazi",
+      "Tuzla",
+      "Umraniye",
+      "Uskudar",
+      "Zeytinburnu"
+    ],
+    "Izmir": [
+      "Aliaga",
+      "Balcova",
+      "Bayindir",
+      "Bayrakli",
+      "Bergama",
+      "Beydag",
+      "Bornova",
+      "Buca",
+      "Cesme",
+      "Cigli",
+      "Dikili",
+      "Foca",
+      "Gaziemir",
+      "Guzelbahce",
+      "Karabaglar",
+      "Karaburun",
+      "Karsiyaka",
+      "Kemalpasa",
+      "Kinik",
+      "Kiraz",
+      "Konak",
+      "Menderes",
+      "Menemen",
+      "Narlidere",
+      "Odemis",
+      "Seferihisar",
+      "Selcuk",
+      "Tire",
+      "Torbali",
+      "Urla"
+    ],
+    "Kars": [
+      "Merkez",
+      "Akyaka",
+      "Arpacay",
+      "Digor",
+      "Kagizman",
+      "Sarikamis",
+      "Selim",
+      "Susuz"
+    ],
+    "Kastamonu": [
+      "Merkez",
+      "Abana",
+      "Agli",
+      "Arac",
+      "Azdavay",
+      "Bozkurt",
+      "Catalzeytin",
+      "Cide",
+      "Daday",
+      "Devrekani",
+      "Doganyurt",
+      "Hanonu",
+      "Ihsangazi",
+      "Inebolu",
+      "Kure",
+      "Pinarbasi",
+      "Senpazar",
+      "Seydiler",
+      "Taskopru",
+      "Tosya"
+    ],
+    "Kayseri": [
+      "Akkisla",
+      "Bunyan",
+      "Develi",
+      "Felahiye",
+      "Hacilar",
+      "Incesu",
+      "Kocasinan",
+      "Melikgazi",
+      "Ozvatan",
+      "Pinarbasi",
+      "Sarioglan",
+      "Sariz",
+      "Talas",
+      "Tomarza",
+      "Yahyali",
+      "Yesilhisar"
+    ],
+    "Kirklareli": [
+      "Merkez",
+      "Babaeski",
+      "Demirkoy",
+      "Kofcaz",
+      "Luleburgaz",
+      "Pehlivankoy",
+      "Pinarhisar",
+      "Vize"
+    ],
+    "Kirsehir": [
+      "Merkez",
+      "Akcakent",
+      "Akpinar",
+      "Boztepe",
+      "Cicekdagi",
+      "Kaman",
+      "Mucur"
+    ],
+    "Kocaeli": [
+      "Basiskele",
+      "Cayirova",
+      "Darica",
+      "Derince",
+      "Dilovasi",
+      "Gebze",
+      "Golcuk",
+      "Izmit",
+      "Kandira",
+      "Karamursel",
+      "Kartepe",
+      "Korfez"
+    ],
+    "Konya": [
+      "Ahirli",
+      "Akoren",
+      "Aksehir",
+      "Altinekin",
+      "Beysehir",
+      "Bozkir",
+      "Celtik",
+      "Cihanbeyli",
+      "Cumra",
+      "Derbent",
+      "Derebucak",
+      "Doganhisar",
+      "Emirgazi",
+      "Eregli",
+      "Guneysinir",
+      "Hadim",
+      "Halkapinar",
+      "Huyuk",
+      "Ilgin",
+      "Kadinhani",
+      "Karapinar",
+      "Karatay",
+      "Kulu",
+      "Meram",
+      "Sarayonu",
+      "Selcuklu",
+      "Seydisehir",
+      "Taskent",
+      "Tuzlukcu",
+      "Yalihuyuk",
+      "Yunak"
+    ],
+    "Kutahya": [
+      "Merkez",
+      "Altintas",
+      "Aslanapa",
+      "Cavdarhisar",
+      "Domanic",
+      "Dumlupinar",
+      "Emet",
+      "Gediz",
+      "Hisarcik",
+      "Pazarlar",
+      "Saphane",
+      "Simav",
+      "Tavsanli"
     ],
     "Malatya": [
-      "Merkez",
       "Akcadag",
       "Arapgir",
+      "Arguvan",
       "Battalgazi",
       "Darende",
+      "Dogansehir",
+      "Doganyol",
+      "Hekimhan",
+      "Kale",
+      "Kuluncak",
+      "Puturge",
+      "Yazihan",
       "Yesilyurt"
+    ],
+    "Manisa": [
+      "Ahmetli",
+      "Akhisar",
+      "Alasehir",
+      "Demirci",
+      "Golmarmara",
+      "Gordes",
+      "Kirkagac",
+      "Koprubasi",
+      "Kula",
+      "Salihli",
+      "Sarigol",
+      "Saruhanli",
+      "Sehzadeler",
+      "Selendi",
+      "Soma",
+      "Turgutlu",
+      "Yunusemre"
+    ],
+    "Kahramanmaras": [
+      "Afsin",
+      "Andirin",
+      "Caglayancerit",
+      "Dulkadiroglu",
+      "Ekinozu",
+      "Elbistan",
+      "Goksun",
+      "Nurhak",
+      "Onikisubat",
+      "Pazarcik",
+      "Turkoglu"
+    ],
+    "Mardin": [
+      "Artuklu",
+      "Dargecit",
+      "Derik",
+      "Kiziltepe",
+      "Mazidagi",
+      "Midyat",
+      "Nusaybin",
+      "Omerli",
+      "Savur",
+      "Yesilli"
+    ],
+    "Mugla": [
+      "Bodrum",
+      "Dalaman",
+      "Datca",
+      "Fethiye",
+      "Kavaklidere",
+      "Koycegiz",
+      "Marmaris",
+      "Mentese",
+      "Milas",
+      "Ortaca",
+      "Seydikemer",
+      "Ula",
+      "Yatagan"
+    ],
+    "Mus": ["Merkez", "Bulanik", "Haskoy", "Korkut", "Malazgirt", "Varto"],
+    "Nevsehir": [
+      "Merkez",
+      "Acigol",
+      "Avanos",
+      "Derinkuyu",
+      "Gulsehir",
+      "Hacibektas",
+      "Kozakli",
+      "Urgup"
+    ],
+    "Nigde": ["Merkez", "Altunhisar", "Bor", "Camardi", "Ciftlik", "Ulukisla"],
+    "Ordu": [
+      "Akkus",
+      "Altinordu",
+      "Aybasti",
+      "Camas",
+      "Catalpinar",
+      "Caybasi",
+      "Fatsa",
+      "Golkoy",
+      "Gulyali",
+      "Gurgentepe",
+      "Ikizce",
+      "Kabaduz",
+      "Kabatas",
+      "Korgan",
+      "Kumru",
+      "Mesudiye",
+      "Persembe",
+      "Ulubey",
+      "Unye"
+    ],
+    "Rize": [
+      "Merkez",
+      "Ardesen",
+      "Camlihemsin",
+      "Cayeli",
+      "Derepazari",
+      "Findikli",
+      "Guneysu",
+      "Hemsin",
+      "Ikizdere",
+      "Iyidere",
+      "Kalkandere",
+      "Pazar"
+    ],
+    "Sakarya": [
+      "Adapazari",
+      "Akyazi",
+      "Arifiye",
+      "Erenler",
+      "Ferizli",
+      "Geyve",
+      "Hendek",
+      "Karapurcek",
+      "Karasu",
+      "Kaynarca",
+      "Kocaali",
+      "Pamukova",
+      "Sapanca",
+      "Serdivan",
+      "Sogutlu",
+      "Tarakli"
+    ],
+    "Samsun": [
+      "19 Mayis",
+      "Alacam",
+      "Asarcik",
+      "Atakum",
+      "Ayvacik",
+      "Bafra",
+      "Canik",
+      "Carsamba",
+      "Havza",
+      "Ilkadim",
+      "Kavak",
+      "Ladik",
+      "Salipazari",
+      "Tekkekoy",
+      "Terme",
+      "Vezirkopru",
+      "Yakakent"
+    ],
+    "Siirt": [
+      "Merkez",
+      "Baykan",
+      "Eruh",
+      "Kurtalan",
+      "Pervari",
+      "Sirvan",
+      "Tillo"
+    ],
+    "Sinop": [
+      "Merkez",
+      "Ayancik",
+      "Boyabat",
+      "Dikmen",
+      "Duragan",
+      "Erfelek",
+      "Gerze",
+      "Sarayduzu",
+      "Turkeli"
     ],
     "Sivas": [
       "Merkez",
+      "Akincilar",
+      "Altinyayla",
+      "Divrigi",
+      "Dogansar",
+      "Gemerek",
+      "Golova",
+      "Gurun",
+      "Hafik",
+      "Imranli",
+      "Kangal",
+      "Koyulhisar",
       "Sarkisla",
       "Susehri",
-      "Gemerek",
-      "Kangal",
-      "Yildizeli"
+      "Ulas",
+      "Yildizeli",
+      "Zara"
     ],
-    "Ankara": [
-      "Merkez",
-      "Cankaya",
-      "Kecioren",
-      "Mamak",
-      "Etimesgut",
-      "Sincan",
-      "Golbasi"
+    "Tekirdag": [
+      "Cerkezkoy",
+      "Corlu",
+      "Ergene",
+      "Hayrabolu",
+      "Kapakli",
+      "Malkara",
+      "Marmaraereglisi",
+      "Muratli",
+      "Saray",
+      "Sarkoy",
+      "Suleymanpasa"
     ],
-    "Istanbul": [
+    "Tokat": [
       "Merkez",
-      "Kadikoy",
-      "Uskudar",
-      "Besiktas",
-      "Fatih",
-      "Beyoglu"
+      "Almus",
+      "Artova",
+      "Basciftlik",
+      "Erbaa",
+      "Niksar",
+      "Pazar",
+      "Resadiye",
+      "Sulusaray",
+      "Turhal",
+      "Yesilyurt",
+      "Zile"
     ],
-    "Izmir": ["Merkez", "Konak", "Karsiyaka", "Bornova", "Bayrakli", "Cigli"],
-    "Bursa": ["Merkez", "Nilufer", "Osmangazi", "Yildirim", "Gursu", "Kestel"],
-    "Konya": ["Merkez", "Selcuklu", "Meram", "Karatay", "Eregli", "Aksehir"],
-    "Antalya": [
-      "Merkez",
-      "Muratpasa",
-      "Konyaalti",
-      "Kepez",
-      "Alanya",
-      "Manavgat"
+    "Trabzon": [
+      "Akcaabat",
+      "Arakli",
+      "Arsin",
+      "Besikduzu",
+      "Carsibasi",
+      "Caykara",
+      "Dernekpazari",
+      "Duzkoy",
+      "Hayrat",
+      "Koprubasi",
+      "Macka",
+      "Of",
+      "Ortahisar",
+      "Salpazari",
+      "Surmene",
+      "Tonya",
+      "Vakfikebir",
+      "Yomra"
     ],
-    "Diyarbakir": [
+    "Tunceli": [
       "Merkez",
-      "Baglar",
-      "Kayapinar",
-      "Ergani",
-      "Bismil",
-      "Cermik"
+      "Cemisgezek",
+      "Hozat",
+      "Mazgirt",
+      "Nazimiye",
+      "Ovacik",
+      "Pertek",
+      "Pulumur"
     ],
-    "Gaziantep": [
-      "Merkez",
-      "Sahinbey",
-      "Sehitkamil",
-      "Nizip",
-      "Islahiye",
-      "Araban"
+    "Sanliurfa": [
+      "Akcakale",
+      "Birecik",
+      "Bozova",
+      "Ceylanpinar",
+      "Eyyubiye",
+      "Halfeti",
+      "Haliliye",
+      "Harran",
+      "Hilvan",
+      "Karakopru",
+      "Siverek",
+      "Suruc",
+      "Viransehir"
     ],
-    "Mersin": [
+    "Usak": ["Merkez", "Banaz", "Esme", "Karahalli", "Sivasli", "Ulubey"],
+    "Van": [
+      "Bahcesaray",
+      "Baskale",
+      "Caldiran",
+      "Catak",
+      "Edremit",
+      "Ercis",
+      "Gevas",
+      "Gurpinar",
+      "Ipekyolu",
+      "Muradiye",
+      "Ozalp",
+      "Saray",
+      "Tusba"
+    ],
+    "Yozgat": [
       "Merkez",
-      "Akdeniz",
-      "Yenisehir",
-      "Tarsus",
-      "Silifke",
-      "Erdemli"
+      "Akdagmadeni",
+      "Aydincik",
+      "Bogazliyan",
+      "Candir",
+      "Cayiralan",
+      "Cekerek",
+      "Kadisehri",
+      "Saraykent",
+      "Sarikaya",
+      "Sefaatli",
+      "Sorgun",
+      "Yenifakili",
+      "Yerkoy"
+    ],
+    "Zonguldak": [
+      "Merkez",
+      "Alapli",
+      "Caycuma",
+      "Devrek",
+      "Eregli",
+      "Gokcebey",
+      "Kilimli",
+      "Kozlu"
+    ],
+    "Aksaray": [
+      "Merkez",
+      "Agacoren",
+      "Eskil",
+      "Gulagac",
+      "Guzelyurt",
+      "Ortakoy",
+      "Sariyahsi",
+      "Sultanhani"
+    ],
+    "Bayburt": ["Merkez", "Aydintepe", "Demirozu"],
+    "Karaman": [
+      "Merkez",
+      "Ayranci",
+      "Basyayla",
+      "Ermenek",
+      "Kazimkarabekir",
+      "Sariveliler"
+    ],
+    "Kirikkale": [
+      "Merkez",
+      "Bahsili",
+      "Baliseyh",
+      "Celebi",
+      "Delice",
+      "Karakecili",
+      "Keskin",
+      "Sulakyurt",
+      "Yahsihan"
+    ],
+    "Batman": ["Merkez", "Besiri", "Gercus", "Hasankeyf", "Kozluk", "Sason"],
+    "Sirnak": [
+      "Merkez",
+      "Beytussebap",
+      "Cizre",
+      "Guclukonak",
+      "Idil",
+      "Silopi",
+      "Uludere"
+    ],
+    "Bartin": ["Merkez", "Amasra", "Kurucasile", "Ulus"],
+    "Ardahan": ["Merkez", "Cildir", "Damal", "Gole", "Hanak", "Posof"],
+    "Igdir": ["Merkez", "Aralik", "Karakoyunlu", "Tuzluca"],
+    "Yalova": [
+      "Merkez",
+      "Altinova",
+      "Armutlu",
+      "Ciftlikkoy",
+      "Cinarcik",
+      "Termal"
+    ],
+    "Karabuk": [
+      "Merkez",
+      "Eflani",
+      "Eskipazar",
+      "Ovacik",
+      "Safranbolu",
+      "Yenice"
+    ],
+    "Kilis": ["Merkez", "Elbeyli", "Musabeyli", "Polateli"],
+    "Osmaniye": [
+      "Merkez",
+      "Bahce",
+      "Duzici",
+      "Hasanbeyli",
+      "Kadirli",
+      "Sumbas",
+      "Toprakkale"
+    ],
+    "Duzce": [
+      "Merkez",
+      "Akcakoca",
+      "Cilimli",
+      "Cumayeri",
+      "Golyaka",
+      "Gumusova",
+      "Kaynasli",
+      "Yigilca"
     ],
   };
 
@@ -2802,7 +4419,8 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
       final gosterilecekSure = kalanSure == "00:00:00" ? "--:--:--" : kalanSure;
       final gosterilecekVakit =
           siradakiVakit == "Yukleniyor..." ? "Namaz" : siradakiVakit;
-      await updateNotification(gosterilecekSure, gosterilecekVakit);
+      await updateNotification(
+          gosterilecekSure, gosterilecekVakit, bugununVakitleri);
     } else {
       await cancelNotification();
     }
@@ -2929,6 +4547,34 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFFB5627A)),
+                        ),
+                        const Divider(color: Color(0xFFE8C4D0)),
+                        // 🔧 YENİ: Yazı boyutu — isteyen kullanıcı tüm
+                        // arayüzü büyük yazıyla kullanabilir, hiçbir sayfa
+                        // koda dokunulmadan MediaQuery üzerinden ölçekleniyor.
+                        // 🔧 DÜZELTME: Üst sınır 1.6'dan 1.3'e düşürüldü.
+                        // Ana Sayfa/Vakitler/Kur'an sayfalarına dokunulmadığı
+                        // için (senin isteğin üzerine) bu sayfalardaki sabit
+                        // genişlikli satırlar çok yüksek ölçeklerde taşabiliyordu
+                        // (o sarı-siyah çizgili "overflow" uyarısı SADECE debug
+                        // modda görünür, gerçek/yayınlanan APK'da görünmez —
+                        // ama metin yine de kırpılabilir). Daha dar bir aralık
+                        // bu riski pratikte ortadan kaldırıyor.
+                        Text(
+                            "🔤 Yazı Boyutu: %${(widget.yaziBoyutuOlcegi * 100).round()}",
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        Slider(
+                          value: widget.yaziBoyutuOlcegi,
+                          min: 0.9,
+                          max: 1.3,
+                          divisions: 8,
+                          activeColor: const Color(0xFFB5627A),
+                          label: "%${(widget.yaziBoyutuOlcegi * 100).round()}",
+                          onChanged: (val) {
+                            widget.onYaziBoyutuChanged(val);
+                            setModalState(() {});
+                          },
                         ),
                         const Divider(color: Color(0xFFE8C4D0)),
                         SwitchListTile(
@@ -3280,7 +4926,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                             ozelGunMesaji: _ozelGunMesaji,
                           ),
                           KuranWebView(isDark: widget.isDarkMode),
-                          KibleWebView(isDark: widget.isDarkMode),
+                          KiblePusulasi(isDark: widget.isDarkMode),
                           ZikirmatikSayfasi(isDark: widget.isDarkMode),
                         ],
                       ),
@@ -3473,7 +5119,7 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                     children: [
                       Icon(Icons.calendar_today,
                           size: 18, color: Color(0xFFB5627A)),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Text("🌸 Yaklasan Ozel Gun",
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
@@ -3664,10 +5310,7 @@ class VakitlerListeSayfasi extends StatelessWidget {
                                   const Color(0xFF3D1F3A),
                                   const Color(0xFF2D1B2E)
                                 ]
-                              : [
-                                  const Color(0xFFF5E6E8),
-                                  const Color(0xFFE8C4D0)
-                                ])
+                              : const [Color(0xFFF5E6E8), Color(0xFFE8C4D0)])
                       : null,
                   color: isCurrent
                       ? null
