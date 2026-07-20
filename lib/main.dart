@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -12,11 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
-import 'package:flutter_compass/flutter_compass.dart';
-import 'package:geolocator/geolocator.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -25,28 +21,14 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('tr_TR', null);
-
   tz_data.initializeTimeZones();
 
   if (!kIsWeb) {
     try {
       final status = await Permission.notification.status;
       if (status.isDenied) {
-        final result = await Permission.notification.request();
-        debugPrint("📢 Bildirim izni sonucu: $result");
-      } else if (status.isPermanentlyDenied) {
-        debugPrint("📢 Bildirim izni kalıcı olarak reddedilmiş!");
+        await Permission.notification.request();
       }
-
-      final isGranted = await Permission.notification.isGranted;
-      debugPrint("📢 Bildirim izni verildi mi? $isGranted");
-
-      final exactAlarmStatus = await Permission.scheduleExactAlarm.status;
-      if (exactAlarmStatus.isDenied) {
-        await Permission.scheduleExactAlarm.request();
-      }
-      debugPrint(
-          "⏰ Tam zamanlı alarm izni: ${await Permission.scheduleExactAlarm.status}");
 
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -76,12 +58,10 @@ void main() async {
         const AndroidNotificationChannel channel2 = AndroidNotificationChannel(
           'namaz_vakitleri_sabit',
           'Sabit Namaz Vakti',
-          description: 'Namaz vaktine kalan süreyi gösterir',
+          description: 'Namaz vakitlerini gösterir',
           importance: Importance.low,
         );
         await androidImplementation.createNotificationChannel(channel2);
-
-        debugPrint("✅ Bildirim kanalları oluşturuldu!");
       }
     } catch (e) {
       debugPrint("❌ Başlangıç bildirim hatası: $e");
@@ -201,16 +181,19 @@ Future<void> showNotification(
       body,
       platformChannelSpecifics,
     );
-    debugPrint("✅ Bildirim gönderildi: $title");
   } catch (e) {
     debugPrint("❌ Bildirim hatası: $e");
   }
 }
 
-Future<void> updateNotification(
-  String remainingTime,
-  String nextPrayer,
+// ==================== VAKİT BİLGİ ÇUBUĞU BİLDİRİMİ ====================
+// aktifVakit: "Ogle", "Ikindi" gibi o an içinde bulunulan vakit anahtarı.
+// Bildirimde üst satırda vakit saatleri, alt satırda (----------- çizgisinin
+// altında) her vaktin süresi | ile ayrılarak gösterilir. Aktif vakit pembe
+// (#B5627A) ve kalın renkte vurgulanır.
+Future<void> updateVakitBilgiCubugu(
   Map<String, String> vakitler,
+  String aktifVakit,
 ) async {
   if (kIsWeb) return;
 
@@ -224,21 +207,85 @@ Future<void> updateNotification(
       "Aksam": "Akşam",
       "Yatsi": "Yatsı",
     };
-    final ustSatir = sira
+    const pembeRenk = "#B5627A";
+
+    // Sadece verisi gelmiş (--:-- olmayan) vakitleri, günlük sırayla al.
+    final gecerliVakitler = sira
         .where((v) => vakitler[v] != null && vakitler[v] != "--:--")
-        .map((v) => "${gosterimAdi[v]} ${vakitler[v]}")
-        .join("  •  ");
+        .toList();
+
+    if (gecerliVakitler.isEmpty) return;
+
+    // "HH:mm" metnini bugüne ait bir DateTime'a çevirir.
+    DateTime? zamanCoz(String vakitAdi) {
+      final saat = vakitler[vakitAdi];
+      if (saat == null || saat == "--:--") return null;
+      final parca = saat.split(":");
+      if (parca.length != 2) return null;
+      final simdi = DateTime.now();
+      final s = int.tryParse(parca[0]);
+      final d = int.tryParse(parca[1]);
+      if (s == null || d == null) return null;
+      return DateTime(simdi.year, simdi.month, simdi.day, s, d);
+    }
+
+    String vurgula(String metin, String vakitAnahtari) {
+      final aktifMi = aktifVakit.startsWith(vakitAnahtari);
+      return aktifMi ? "<font color='$pembeRenk'><b>$metin</b></font>" : metin;
+    }
+
+    // 1. SATIR: "İmsak 05:30 | Güneş 07:00 | ..." — aktif vakit pembe.
+    final ustSatirParcalari = gecerliVakitler.map((v) {
+      final metin = "${gosterimAdi[v] ?? v} ${vakitler[v]}";
+      return vurgula(metin, v);
+    }).toList();
+    final ustSatir = ustSatirParcalari.join(" | ");
+
+    // 2. SATIR: Her vaktin süresi (o vakitten bir sonraki vakte kadar olan
+    // aralık). Son vakit (Yatsı) ertesi günün ilk vaktine kadar hesaplanır.
+    final altSatirParcalari = <String>[];
+    for (int i = 0; i < gecerliVakitler.length; i++) {
+      final v = gecerliVakitler[i];
+      final baslangic = zamanCoz(v);
+      if (baslangic == null) continue;
+
+      DateTime? bitis;
+      if (i < gecerliVakitler.length - 1) {
+        bitis = zamanCoz(gecerliVakitler[i + 1]);
+      } else {
+        final ilkVakitZamani = zamanCoz(gecerliVakitler.first);
+        bitis = ilkVakitZamani?.add(const Duration(days: 1));
+      }
+      if (bitis == null) continue;
+
+      final sure = bitis.difference(baslangic);
+      if (sure.isNegative) continue;
+
+      final saatKismi = sure.inHours;
+      final dakikaKismi = sure.inMinutes % 60;
+      final metin = "${gosterimAdi[v] ?? v} ${saatKismi}s ${dakikaKismi}dk";
+      altSatirParcalari.add(vurgula(metin, v));
+    }
+    final altSatir = altSatirParcalari.join(" | ");
+
+    final icerik = "$ustSatir\n-----------\n$altSatir";
+
+    // Bildirim daraltılmışken görünen metin (HTML etiketsiz, sade).
+    final RegExp htmlEtiketi = RegExp(r"<[^>]*>");
+    final daraltilmisMetin = ustSatir.replaceAll(htmlEtiketi, "");
 
     final bigText = BigTextStyleInformation(
-      "$ustSatir\n\n⏰ $nextPrayer vaktine $remainingTime kaldı",
+      icerik,
       contentTitle: "🕌 Bugünün Namaz Vakitleri",
-      summaryText: "Güncelleniyor",
+      summaryText: "",
+      htmlFormatBigText: true,
+      htmlFormatContentTitle: true,
     );
 
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
         'namaz_vakitleri_sabit',
-        'Sabit Namaz Vakti',
+        'Namaz Vakitleri',
         importance: Importance.low,
         priority: Priority.low,
         ongoing: true,
@@ -254,19 +301,17 @@ Future<void> updateNotification(
     await flutterLocalNotificationsPlugin.show(
       999,
       "🕌 Bugünün Namaz Vakitleri",
-      "$ustSatir  —  $nextPrayer vaktine $remainingTime kaldı",
+      daraltilmisMetin,
       details,
     );
-    debugPrint("✅ Sabit bildirim güncellendi: $remainingTime");
   } catch (e) {
-    debugPrint("❌ Sabit bildirim hatası: $e");
+    debugPrint("❌ Vakit bilgi çubuğu hatası: $e");
   }
 }
 
 Future<void> cancelNotification() async {
   try {
     await flutterLocalNotificationsPlugin.cancel(999);
-    debugPrint("✅ Sabit bildirim kapatıldı");
   } catch (e) {
     debugPrint("❌ Bildirim kapatma hatası: $e");
   }
@@ -274,7 +319,6 @@ Future<void> cancelNotification() async {
 
 Future<void> cancelAllScheduledNotifications() async {
   await flutterLocalNotificationsPlugin.cancelAll();
-  debugPrint("✅ Tüm zamanlanmış bildirimler temizlendi");
 }
 
 Future<void> schedulePrayerNotifications(Map<String, String> vakitler) async {
@@ -314,78 +358,9 @@ Future<void> schedulePrayerNotifications(Map<String, String> vakitler) async {
 
       await _scheduleSingleNotification(
           vakitZamani, vakit["ad"]!, vakit["zaman"]!);
-
-      final vakitIndex = vakitList.indexOf(vakit);
-      final sonrakiVakit =
-          vakitIndex < vakitList.length - 1 ? vakitList[vakitIndex + 1] : null;
-      if (sonrakiVakit != null && sonrakiVakit["zaman"] != "--:--") {
-        await _scheduleSabitBarYenile(
-            vakitZamani, sonrakiVakit["ad"]!, vakitler);
-      }
     } catch (e) {
       debugPrint("❌ Vakit zamanlama hatası (${vakit["ad"]}): $e");
     }
-  }
-  debugPrint("✅ Tüm namaz vakitleri zamanlandı!");
-}
-
-Future<void> _scheduleSabitBarYenile(
-  DateTime zaman,
-  String sonrakiVakitAdi,
-  Map<String, String> vakitler,
-) async {
-  const gosterimAdi = {
-    "Imsak": "İmsak",
-    "Gunes": "Güneş",
-    "Ogle": "Öğle",
-    "Ikindi": "İkindi",
-    "Aksam": "Akşam",
-    "Yatsi": "Yatsı",
-  };
-  const sira = ["Imsak", "Gunes", "Ogle", "Ikindi", "Aksam", "Yatsi"];
-  final ustSatir = sira
-      .where((v) => vakitler[v] != null && vakitler[v] != "--:--")
-      .map((v) => "${gosterimAdi[v]} ${vakitler[v]}")
-      .join("  •  ");
-  final sonrakiSaat = vakitler[sonrakiVakitAdi] ?? "--:--";
-  final sonrakiGosterim = gosterimAdi[sonrakiVakitAdi] ?? sonrakiVakitAdi;
-
-  final tamZamanliIzinVar = await Permission.scheduleExactAlarm.isGranted;
-  final scheduleMode = tamZamanliIzinVar
-      ? AndroidScheduleMode.exactAllowWhileIdle
-      : AndroidScheduleMode.inexactAllowWhileIdle;
-
-  try {
-    await flutterLocalNotificationsPlugin.zonedSchedule(
-      999,
-      "🕌 Bugünün Namaz Vakitleri",
-      "$ustSatir  —  Sıradaki: $sonrakiGosterim ($sonrakiSaat)",
-      tz.TZDateTime.from(zaman, tz.local),
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'namaz_vakitleri_sabit',
-          'Sabit Namaz Vakti',
-          importance: Importance.low,
-          priority: Priority.low,
-          ongoing: true,
-          autoCancel: false,
-          playSound: false,
-          enableVibration: false,
-          onlyAlertOnce: true,
-          showWhen: false,
-          styleInformation: BigTextStyleInformation(
-            "$ustSatir\n\n⏰ Sıradaki: $sonrakiGosterim ($sonrakiSaat)",
-            contentTitle: "🕌 Bugünün Namaz Vakitleri",
-          ),
-        ),
-      ),
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
-      androidScheduleMode: scheduleMode,
-    );
-  } catch (e) {
-    debugPrint("❌ Sabit bildirim zamanlama hatası: $e");
   }
 }
 
@@ -421,9 +396,6 @@ Future<void> _scheduleSingleNotification(
     matchDateTimeComponents: DateTimeComponents.time,
     androidScheduleMode: scheduleMode,
   );
-
-  debugPrint(
-      "✅ Bildirim zamanlandı ($scheduleMode): $vakitAdi - ${DateFormat('HH:mm').format(time)}");
 }
 
 // ==================== EZAN VAKTİ APP ====================
@@ -437,6 +409,7 @@ class EzanVaktiApp extends StatefulWidget {
 class _EzanVaktiAppState extends State<EzanVaktiApp> {
   bool isDarkMode = false;
   bool _bildirimIzniKaliciRed = false;
+  double _yaziBoyutuOlcegi = 1.0;
 
   @override
   void initState() {
@@ -463,8 +436,6 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
       _yaziBoyutuOlcegi = prefs.getDouble('yazi_boyutu_olcegi') ?? 1.0;
     });
   }
-
-  double _yaziBoyutuOlcegi = 1.0;
 
   Future<void> _yaziBoyutunuKaydet(double deger) async {
     final prefs = await SharedPreferences.getInstance();
@@ -499,15 +470,6 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
               isDarkMode ? const Color(0xFFF5B7B7) : const Color(0xFFB5627A),
           elevation: 0,
           centerTitle: true,
-        ),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(fontSize: 18, color: Color(0xFF4A2E3B)),
-          bodyMedium: TextStyle(fontSize: 16, color: Color(0xFF4A2E3B)),
-          titleLarge: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFFB5627A),
-          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -625,7 +587,6 @@ class AltBilgiMetni extends StatelessWidget {
   }
 }
 
-// ==================== ÖZEL GÜNLER ====================
 class OzelGunler {
   static final List<Map<String, dynamic>> _ozelGunler = [
     {
@@ -2175,7 +2136,7 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
   }
 }
 
-// ==================== KIBLE PUSULASI ====================
+// ==================== KIBLE PUSULASI (DÜZELTİLMİŞ) ====================
 class KiblePusulasi extends StatefulWidget {
   final bool isDark;
 
@@ -2186,357 +2147,89 @@ class KiblePusulasi extends StatefulWidget {
 }
 
 class _KiblePusulasiState extends State<KiblePusulasi> {
-  double _heading = 0.0;
-  bool _pusulaVar = true;
-
-  final Map<String, List<double>> _ilKoordinat = {
-    "Adana": [37.0, 35.3213333],
-    "Adıyaman": [37.7641667, 38.2761667],
-    "Afyonkarahisar": [38.76376, 30.54034],
-    "Ağrı": [39.7216667, 43.0566667],
-    "Amasya": [40.65, 35.8333333],
-    "Ankara": [39.92077, 32.85411],
-    "Antalya": [36.88414, 30.70563],
-    "Artvin": [41.1833333, 41.8166667],
-    "Aydın": [37.8444, 27.8458],
-    "Balıkesir": [39.648369, 27.8826100],
-    "Bilecik": [40.150131, 29.983061],
-    "Bingöl": [38.8853490, 40.4982910],
-    "Bitlis": [38.4, 42.1166667],
-    "Bolu": [40.7394790, 31.6115610],
-    "Burdur": [37.7269090, 30.2888760],
-    "Bursa": [40.18257, 29.06687],
-    "Çanakkale": [40.1553120, 26.4141600],
-    "Çankırı": [40.6, 33.6166667],
-    "Çorum": [40.5505556, 34.9555556],
-    "Denizli": [37.77652, 29.08639],
-    "Diyarbakır": [37.91441, 40.2306290],
-    "Edirne": [41.6666667, 26.5666667],
-    "Elazığ": [38.680969, 39.226398],
-    "Erzincan": [39.75, 39.5],
-    "Erzurum": [39.9043189, 41.2678853],
-    "Eskişehir": [39.784302, 30.51922],
-    "Gaziantep": [37.06622, 37.38332],
-    "Giresun": [40.912811, 38.38953],
-    "Gümüşhane": [40.4602778, 39.4813889],
-    "Hakkari": [37.5833333, 43.7333333],
-    "Hatay": [36.4018488, 36.3498097],
-    "Isparta": [37.7666667, 30.55],
-    "Mersin": [36.8, 34.6333333],
-    "İstanbul": [41.00527, 28.97696],
-    "İzmir": [38.41885, 27.12872],
-    "Kars": [40.59267, 43.077831],
-    "Kastamonu": [41.38871, 33.78273],
-    "Kayseri": [38.7333333, 35.4833333],
-    "Kırklareli": [41.7333333, 27.2166667],
-    "Kırşehir": [39.15, 34.1666667],
-    "Kocaeli": [40.8532704, 29.8815203],
-    "Konya": [37.8666667, 32.4833333],
-    "Kütahya": [39.4166667, 29.9833333],
-    "Malatya": [38.35519, 38.30946],
-    "Manisa": [38.619099, 27.428921],
-    "Kahramanmaraş": [37.5833333, 36.9333333],
-    "Mardin": [37.3122361, 40.7351120],
-    "Muğla": [37.2152778, 28.3636111],
-    "Muş": [38.7432926, 41.5064823],
-    "Nevşehir": [38.62442, 34.723969],
-    "Niğde": [37.9666667, 34.6833333],
-    "Ordu": [40.9833333, 37.8833333],
-    "Rize": [41.02005, 40.523449],
-    "Sakarya": [40.7568793, 30.378138],
-    "Samsun": [41.292782, 36.33128],
-    "Siirt": [37.94429, 41.93288],
-    "Sinop": [42.0264222, 35.1550745],
-    "Sivas": [39.747662, 37.017879],
-    "Tekirdağ": [40.9833333, 27.5166667],
-    "Tokat": [40.3166667, 36.55],
-    "Trabzon": [41.0, 39.7333333],
-    "Tunceli": [39.1079868, 39.5401672],
-    "Şanlıurfa": [37.15, 38.8],
-    "Uşak": [38.682301, 29.40819],
-    "Van": [38.4941667, 43.38],
-    "Yozgat": [39.82, 34.8044444],
-    "Zonguldak": [41.456409, 31.798731],
-    "Aksaray": [38.36869, 34.03698],
-    "Bayburt": [40.255169, 40.22488],
-    "Karaman": [37.17593, 33.228748],
-    "Kırıkkale": [39.846821, 33.515251],
-    "Batman": [37.881168, 41.13509],
-    "Şırnak": [37.5163889, 42.4611111],
-    "Bartın": [41.6344444, 32.3375],
-    "Ardahan": [41.110481, 42.702171],
-    "Iğdır": [39.9166667, 44.0333333],
-    "Yalova": [40.65, 29.2666667],
-    "Karabük": [41.2, 32.6333333],
-    "Kilis": [36.718399, 37.12122],
-    "Osmaniye": [37.06805, 36.261589],
-    "Düzce": [40.843849, 31.15654],
-  };
-
-  static const double _kabeLat = 21.4225;
-  static const double _kabeLon = 39.8262;
-
-  double _kibleAcisi = 154.0;
-  String? _manuelIl;
-  String _kayitliSehir = "Muş";
-
-  // 3 Farklı Kıble Kaynağı
-  Map<String, double> _kibleAcilar = {
-    'Aladhan': 0.0,
-    'Math': 0.0,
-    'Geo': 0.0,
-  };
-  String _seciliKaynak = "Aladhan";
-
-  final List<Map<String, dynamic>> _kibleKaynaklari = [
-    {
-      'id': 'Aladhan',
-      'ad': '🌙 Aladhan',
-      'aciklama': 'Uluslararası İslami API',
-      'yildiz': 5
-    },
-    {
-      'id': 'Math',
-      'ad': '📐 Matematiksel',
-      'aciklama': 'Büyük daire formülü',
-      'yildiz': 4
-    },
-    {
-      'id': 'Geo',
-      'ad': '🌍 Coğrafi',
-      'aciklama': 'Haversine formülü',
-      'yildiz': 4
-    },
-  ];
-
-  String _konumKaynagi = "kayitli";
-  int? _gpsDogrulukYildizi;
-  bool _gpsYukleniyor = false;
-  String? _gpsHata;
-
-  Stream<dynamic>? _compassStream;
+  late WebViewController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _pusulaKontrol();
-    _konumBilgisiniYukle();
+    _qiblaSayfasiniYukle();
   }
 
-  double _bearingHesapla(double lat1, double lon1, double lat2, double lon2) {
-    final phi1 = lat1 * math.pi / 180;
-    final phi2 = lat2 * math.pi / 180;
-    final deltaLambda = (lon2 - lon1) * math.pi / 180;
-    final y = math.sin(deltaLambda) * math.cos(phi2);
-    final x = math.cos(phi1) * math.sin(phi2) -
-        math.sin(phi1) * math.cos(phi2) * math.cos(deltaLambda);
-    final theta = math.atan2(y, x);
-    return (theta * 180 / math.pi + 360) % 360;
-  }
-
-  double _geoHesapla(double lat1, double lon1, double lat2, double lon2) {
-    final dLon = (lon2 - lon1) * math.pi / 180;
-    final lat1Rad = lat1 * math.pi / 180;
-    final lat2Rad = lat2 * math.pi / 180;
-    final x = math.sin(dLon) * math.cos(lat2Rad);
-    final y = math.cos(lat1Rad) * math.sin(lat2Rad) -
-        math.sin(lat1Rad) * math.cos(lat2Rad) * math.cos(dLon);
-    return (math.atan2(x, y) * 180 / math.pi + 360) % 360;
-  }
-
-  Future<void> _tumKibleAcilariniHesapla(double lat, double lon) async {
+  void _qiblaSayfasiniYukle() {
     try {
-      final yanit = await http
-          .get(Uri.parse('https://api.aladhan.com/v1/qibla/$lat/$lon'));
-      final veri = jsonDecode(yanit.body);
-      _kibleAcilar['Aladhan'] = (veri['data']['direction'] as num).toDouble();
-    } catch (_) {
-      _kibleAcilar['Aladhan'] = _bearingHesapla(lat, lon, _kabeLat, _kabeLon);
-    }
-    _kibleAcilar['Math'] = _bearingHesapla(lat, lon, _kabeLat, _kabeLon);
-    _kibleAcilar['Geo'] = _geoHesapla(lat, lon, _kabeLat, _kabeLon);
-    setState(() {});
-  }
-
-  Future<void> _gpsIleKibleBul() async {
-    setState(() {
-      _gpsYukleniyor = true;
-      _gpsHata = null;
-    });
-    try {
-      final servisAcik = await Geolocator.isLocationServiceEnabled();
-      if (!servisAcik) {
-        setState(() {
-          _gpsHata =
-              "Konum servisleri kapalı. Lütfen telefon ayarlarından açın.";
-          _gpsYukleniyor = false;
-        });
-        return;
-      }
-
-      var izin = await Geolocator.checkPermission();
-      if (izin == LocationPermission.denied) {
-        izin = await Geolocator.requestPermission();
-      }
-      if (izin == LocationPermission.denied ||
-          izin == LocationPermission.deniedForever) {
-        setState(() {
-          _gpsHata = "Konum izni verilmedi.";
-          _gpsYukleniyor = false;
-        });
-        return;
-      }
-
-      final konum = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-
-      await _tumKibleAcilariniHesapla(konum.latitude, konum.longitude);
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('kible_manuel_il');
-
-      setState(() {
-        _konumKaynagi = "gps";
-        _manuelIl = null;
-        _gpsDogrulukYildizi = _dogrulukYildizHesapla(konum.accuracy);
-        _gpsYukleniyor = false;
-      });
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(
+            widget.isDark ? const Color(0xFF1A1118) : Colors.white)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (String url) {
+              setState(() {
+                _isLoading = false;
+              });
+            },
+            onWebResourceError: (WebResourceError error) {
+              setState(() {
+                _isLoading = false;
+                _hasError = true;
+              });
+            },
+          ),
+        )
+        ..loadRequest(
+            Uri.parse('https://qiblafinder.withgoogle.com/intl/tr/finder/ar'));
     } catch (e) {
       setState(() {
-        _gpsHata = "Konum alınamadı: $e";
-        _gpsYukleniyor = false;
+        _isLoading = false;
+        _hasError = true;
       });
     }
   }
 
-  int _dogrulukYildizHesapla(double metreDogruluk) {
-    if (metreDogruluk <= 10) return 5;
-    if (metreDogruluk <= 25) return 4;
-    if (metreDogruluk <= 50) return 3;
-    if (metreDogruluk <= 100) return 2;
-    return 1;
-  }
-
-  void _kibleAcisiniGuncelle(String il) {
-    final koordinat = _ilKoordinat[il];
-    if (koordinat == null) return;
-    _tumKibleAcilariniHesapla(koordinat[0], koordinat[1]);
-  }
-
-  Future<void> _konumBilgisiniYukle() async {
-    final prefs = await SharedPreferences.getInstance();
-    final kayitli = prefs.getString('secilen_sehir') ?? "Muş";
-    final manuel = prefs.getString('kible_manuel_il');
+  void _yenidenDene() {
     setState(() {
-      _kayitliSehir = _ilKoordinat.containsKey(kayitli) ? kayitli : "Muş";
-      _manuelIl =
-          (manuel != null && _ilKoordinat.containsKey(manuel)) ? manuel : null;
+      _hasError = false;
+      _isLoading = true;
+      _qiblaSayfasiniYukle();
     });
-    _kibleAcisiniGuncelle(_manuelIl ?? _kayitliSehir);
-  }
-
-  Future<void> _kayitliKonumuKullan() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('kible_manuel_il');
-    setState(() {
-      _manuelIl = null;
-      _konumKaynagi = "kayitli";
-      _gpsDogrulukYildizi = null;
-      _gpsHata = null;
-    });
-    _kibleAcisiniGuncelle(_kayitliSehir);
-  }
-
-  Future<void> _manuelIlSec(String il) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('kible_manuel_il', il);
-    setState(() {
-      _manuelIl = il;
-      _konumKaynagi = "manuel";
-      _gpsDogrulukYildizi = null;
-      _gpsHata = null;
-    });
-    _kibleAcisiniGuncelle(il);
-  }
-
-  void _manuelIlSeciciyiGoster() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: widget.isDark ? const Color(0xFF2D1B2E) : Colors.white,
-        title: const Text("🌸 Şehir Seç",
-            style: TextStyle(
-                color: Color(0xFFB5627A), fontWeight: FontWeight.bold)),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: ListView(
-            children: (_ilKoordinat.keys.toList()..sort()).map((il) {
-              return ListTile(
-                title: Text(il),
-                trailing: (il == (_manuelIl ?? _kayitliSehir))
-                    ? const Icon(Icons.check, color: Color(0xFFB5627A))
-                    : null,
-                onTap: () {
-                  _manuelIlSec(il);
-                  Navigator.pop(context);
-                },
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child:
-                const Text("Kapat", style: TextStyle(color: Color(0xFFB5627A))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _pusulaKontrol() {
-    try {
-      _compassStream = FlutterCompass.events;
-      _pusulaVar = true;
-    } catch (e) {
-      setState(() {
-        _pusulaVar = false;
-      });
-    }
-  }
-
-  void _kaynakDegistir(String kaynakId) {
-    setState(() {
-      _seciliKaynak = kaynakId;
-    });
-  }
-
-  Widget _yildizGoster(int sayi) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(5, (i) {
-        return Icon(
-          i < sayi ? Icons.star : Icons.star_border,
-          size: 14,
-          color: const Color(0xFFB5627A),
-        );
-      }),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final secilenKaynak = _kibleKaynaklari.firstWhere(
-      (k) => k['id'] == _seciliKaynak,
-      orElse: () => _kibleKaynaklari[0],
-    );
-    final gosterilecekAci = _kibleAcilar[_seciliKaynak] ?? 0.0;
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 60,
+              color: widget.isDark ? Colors.white54 : Colors.black54,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Kıble sayfası yüklenirken hata oluştu.\nİnternet bağlantınızı kontrol edin.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: widget.isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _yenidenDene,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB5627A),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Yeniden Dene 🌸"),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       body: FlowerBackground(
@@ -2547,17 +2240,10 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: widget.isDark ? Colors.white70 : Colors.black54,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Spacer(),
                     Text(
-                      "🕋 Kıble Pusulası",
+                      "🕋 Kıble Bulucu",
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -2566,472 +2252,21 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                             : const Color(0xFF4A2E3B),
                       ),
                     ),
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(
-                        Icons.help_outline,
-                        color: widget.isDark ? Colors.white70 : Colors.black54,
-                      ),
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            backgroundColor: widget.isDark
-                                ? const Color(0xFF2D1B2E)
-                                : Colors.white,
-                            title: const Text("🕋 Kıble Pusulası"),
-                            content: const Text(
-                              "📱 Telefonu düz tutun ve etrafında dönün.\n"
-                              "🌹 Pembe ok Kıble yönünü gösterir.\n"
-                              "📍 Kırmızı ok Kuzey yönünü gösterir.\n\n"
-                              "🔢 3 farklı kaynaktan Kıble açısı hesaplanır.\n"
-                              "⭐ Yıldız sayısı kaynağın güvenilirliğini gösterir.",
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text("Tamam 🌸"),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: widget.isDark
-                        ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE8C4D0)),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.location_on,
-                              size: 18,
-                              color: widget.isDark
-                                  ? const Color(0xFFF5B7B7)
-                                  : const Color(0xFFB5627A)),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              _konumKaynagi == "gps"
-                                  ? "📍 GPS (canlı)"
-                                  : "📍 ${_manuelIl ?? _kayitliSehir}${_konumKaynagi == 'manuel' ? ' (manuel)' : ' (kayıtlı)'}",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: widget.isDark
-                                    ? Colors.white
-                                    : const Color(0xFF4A2E3B),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (_gpsDogrulukYildizi != null)
-                            _yildizGoster(_gpsDogrulukYildizi!),
-                        ],
+              Expanded(
+                child: Stack(
+                  children: [
+                    WebViewWidget(controller: _controller),
+                    if (_isLoading)
+                      const Center(
+                        child:
+                            CircularProgressIndicator(color: Color(0xFFB5627A)),
                       ),
-                      if (_gpsHata != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(_gpsHata!,
-                              style: const TextStyle(
-                                  color: Colors.red, fontSize: 12)),
-                        ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed:
-                                  _gpsYukleniyor ? null : _gpsIleKibleBul,
-                              icon: _gpsYukleniyor
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: Colors.white),
-                                    )
-                                  : const Icon(Icons.gps_fixed, size: 18),
-                              label: Text(_gpsYukleniyor
-                                  ? "Konum bulunuyor..."
-                                  : "📍 GPS ile Bul"),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFB5627A),
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _manuelIlSeciciyiGoster,
-                              icon:
-                                  const Icon(Icons.edit_location_alt, size: 18),
-                              label: const Text("Şehir Seç"),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFFB5627A),
-                                side:
-                                    const BorderSide(color: Color(0xFFB5627A)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_konumKaynagi != "kayitli")
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: TextButton.icon(
-                            onPressed: _kayitliKonumuKullan,
-                            icon: const Icon(Icons.restart_alt, size: 16),
-                            label: const Text("Kayıtlı konuma dön"),
-                            style: TextButton.styleFrom(
-                              foregroundColor: widget.isDark
-                                  ? Colors.white54
-                                  : Colors.black54,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: widget.isDark
-                        ? const Color(0xFF2D1B2E).withValues(alpha: 0.6)
-                        : Colors.white.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: const Color(0xFFE8C4D0).withValues(alpha: 0.5)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: _kibleKaynaklari.map((kaynak) {
-                      final secili = _seciliKaynak == kaynak['id'];
-                      return GestureDetector(
-                        onTap: () => _kaynakDegistir(kaynak['id']),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: secili
-                                ? const Color(0xFFB5627A).withValues(alpha: 0.2)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: secili
-                                  ? const Color(0xFFB5627A)
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                kaynak['ad'],
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: secili
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: secili
-                                      ? const Color(0xFFB5627A)
-                                      : (widget.isDark
-                                          ? Colors.white54
-                                          : Colors.black54),
-                                ),
-                              ),
-                              if (secili) _yildizGoster(kaynak['yildiz']),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (!_pusulaVar)
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.sensor_occupied,
-                          size: 60,
-                          color:
-                              widget.isDark ? Colors.white54 : Colors.black54,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Pusula sensörü bulunamadı.\nTelefonunuz pusula desteği sunmuyor olabilir.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color:
-                                widget.isDark ? Colors.white70 : Colors.black54,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _pusulaVar = true;
-                            });
-                            _pusulaKontrol();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFB5627A),
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text("Yeniden Dene 🌸"),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (_pusulaVar)
-                Expanded(
-                  child: StreamBuilder(
-                    stream: _compassStream,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData) {
-                        _heading = snapshot.data!.heading ?? 0.0;
-                      }
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Container(
-                                  width: 280,
-                                  height: 280,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: widget.isDark
-                                        ? const Color(0xFF2D1B2E)
-                                            .withValues(alpha: 0.6)
-                                        : Colors.white.withValues(alpha: 0.8),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFFE8C4D0)
-                                            .withValues(alpha: 0.3),
-                                        blurRadius: 20,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Transform.rotate(
-                                  angle: -_heading * math.pi / 180,
-                                  child: Container(
-                                    width: 220,
-                                    height: 220,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: const Color(0xFFB5627A),
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        Container(
-                                          width: 2,
-                                          height: 90,
-                                          decoration: BoxDecoration(
-                                            color: Colors.red,
-                                            borderRadius:
-                                                BorderRadius.circular(2),
-                                          ),
-                                          alignment: Alignment.bottomCenter,
-                                          child: const Text(
-                                            "N",
-                                            style: TextStyle(
-                                              color: Colors.red,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                        ),
-                                        Container(
-                                          width: 2,
-                                          height: 90,
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey,
-                                            borderRadius:
-                                                BorderRadius.circular(2),
-                                          ),
-                                          alignment: Alignment.topCenter,
-                                          child: const Text(
-                                            "S",
-                                            style: TextStyle(
-                                              color: Colors.grey,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                        ),
-                                        Transform.rotate(
-                                          angle: 90 * math.pi / 180,
-                                          child: Container(
-                                            width: 2,
-                                            height: 80,
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue,
-                                              borderRadius:
-                                                  BorderRadius.circular(2),
-                                            ),
-                                            alignment: Alignment.bottomCenter,
-                                            child: const Text(
-                                              "D",
-                                              style: TextStyle(
-                                                color: Colors.blue,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        Transform.rotate(
-                                          angle: -90 * math.pi / 180,
-                                          child: Container(
-                                            width: 2,
-                                            height: 80,
-                                            decoration: BoxDecoration(
-                                              color: Colors.orange,
-                                              borderRadius:
-                                                  BorderRadius.circular(2),
-                                            ),
-                                            alignment: Alignment.bottomCenter,
-                                            child: const Text(
-                                              "B",
-                                              style: TextStyle(
-                                                color: Colors.orange,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        Transform.rotate(
-                                          angle:
-                                              gosterilecekAci * math.pi / 180,
-                                          child: Container(
-                                            width: 2,
-                                            height: 100,
-                                            color: const Color(0xFFB5627A),
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.end,
-                                              children: [
-                                                Icon(
-                                                  Icons.arrow_upward,
-                                                  color:
-                                                      const Color(0xFFB5627A),
-                                                  size: 30,
-                                                ),
-                                                const Text(
-                                                  "🕋",
-                                                  style:
-                                                      TextStyle(fontSize: 20),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const Icon(
-                                  Icons.local_florist,
-                                  size: 40,
-                                  color: Color(0xFFB5627A),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              "Kıble Açısı: ${gosterilecekAci.toStringAsFixed(1)}°",
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: widget.isDark
-                                    ? Colors.white
-                                    : const Color(0xFF4A2E3B),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Kaynak: ${secilenKaynak['ad']} ${secilenKaynak['aciklama']}",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: widget.isDark
-                                    ? Colors.white54
-                                    : Colors.black45,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 8,
-                              children: _kibleKaynaklari
-                                  .where((k) => k['id'] != _seciliKaynak)
-                                  .map((k) {
-                                final aci = _kibleAcilar[k['id']] ?? 0.0;
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: widget.isDark
-                                        ? Colors.white10
-                                        : Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    "${k['ad']}: ${aci.toStringAsFixed(1)}°",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: widget.isDark
-                                          ? Colors.white38
-                                          : Colors.black38,
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              "🌸 Pembe ok Kıble'yi gösterir",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: widget.isDark
-                                    ? Colors.white54
-                                    : Colors.black45,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
               AltBilgiMetni(isDark: widget.isDark),
             ],
           ),
@@ -4157,7 +3392,11 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   Timer? _saniyeSayaci;
 
   String _sonBildirimGonderilenVakit = "";
-  int _sonBildirimGuncellemeSaniyesi = -1;
+  // Bildirim çubuğunun en son hangi vakit için gösterildiğini tutar.
+  // Sadece bu değer değiştiğinde (yani aktif vakit değiştiğinde) bildirim
+  // yeniden çizilir; böylece her saniye tekrar tekrar gösterilip
+  // titremesinin (flicker) önüne geçilir.
+  String _sonBildirimCubuguVakti = "";
 
   bool _vakitOncesiUyari = true;
   double _kacDakikaOnceSlider = 15.0;
@@ -4591,8 +3830,12 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
             "${kalanSureDuration.inHours.toString().padLeft(2, '0')}:${(kalanSureDuration.inMinutes % 60).toString().padLeft(2, '0')}:${(kalanSureDuration.inSeconds % 60).toString().padLeft(2, '0')}";
       });
 
-      if (simdi.second != _sonBildirimGuncellemeSaniyesi) {
-        _sonBildirimGuncellemeSaniyesi = simdi.second;
+      // Bildirim çubuğunu SADECE aktif vakit değiştiğinde güncelle.
+      // (Önceki hâlde saniye her değiştiğinde -yani pratikte her tick'te-
+      // yeniden çiziliyordu, bu da bildirimin "bi açılıp bi kapanmasına" /
+      // titremesine sebep oluyordu.)
+      if (vakitIsmi != _sonBildirimCubuguVakti) {
+        _sonBildirimCubuguVakti = vakitIsmi;
         _bildirimCubuguGuncelle();
       }
       _kaydetKalanSure();
@@ -4601,11 +3844,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
 
   void _bildirimCubuguGuncelle() async {
     if (_bildirimCubugu) {
-      final gosterilecekSure = kalanSure == "00:00:00" ? "--:--:--" : kalanSure;
-      final gosterilecekVakit =
-          siradakiVakit == "Yükleniyor..." ? "Namaz" : siradakiVakit;
-      await updateNotification(
-          gosterilecekSure, gosterilecekVakit, bugununVakitleri);
+      await updateVakitBilgiCubugu(bugununVakitleri, siradakiVakit);
     } else {
       await cancelNotification();
     }
@@ -4849,9 +4088,9 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                           ),
                         const SizedBox(height: 10),
                         SwitchListTile(
-                          title: const Text("🌼 Bildirim Çubuğu"),
+                          title: const Text("🌼 Vakit Bilgi Çubuğu"),
                           subtitle: const Text(
-                              "Namaz vaktine kalan süre bildirim çubuğunda sabit dursun"),
+                              "Bildirim çubuğunda bugünün tüm vakitleri gösterilsin"),
                           value: _bildirimCubugu,
                           onChanged: (val) async {
                             setModalState(() => _bildirimCubugu = val);
