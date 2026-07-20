@@ -41,10 +41,6 @@ void main() async {
       final isGranted = await Permission.notification.isGranted;
       debugPrint("📢 Bildirim izni verildi mi? $isGranted");
 
-      // 🔧 Vakit bildirimleri zonedSchedule + exactAllowWhileIdle kullanıyor,
-      // bu da Android 12+'ta SCHEDULE_EXACT_ALARM izni gerektiriyor. İzin
-      // yoksa _scheduleSingleNotification içinde inexact moda düşülüyor,
-      // ama önce burada normal şekilde istemeyi deniyoruz.
       final exactAlarmStatus = await Permission.scheduleExactAlarm.status;
       if (exactAlarmStatus.isDenied) {
         await Permission.scheduleExactAlarm.request();
@@ -87,10 +83,6 @@ void main() async {
 
         debugPrint("✅ Bildirim kanalları oluşturuldu!");
       }
-      // 🔧 KALDIRILDI: Uygulama her açıldığında çıkan "Bildirim sistemi
-      // çalışıyor!" test bildirimi kullanıcı isteği üzerine silindi.
-      // Kanal oluşturma ve izin kontrolü yeterli; ayrıca bir test
-      // bildirimi göstermeye gerek yok.
     } catch (e) {
       debugPrint("❌ Başlangıç bildirim hatası: $e");
     }
@@ -215,9 +207,6 @@ Future<void> showNotification(
   }
 }
 
-// 🔧 YENİ: Artık sadece "sıradaki vakit" değil, günün TÜM vakitleri üstte,
-// sıradaki vakit (kalan süreyle birlikte) en altta vurgulanmış olarak
-// gösteriliyor. `vakitler` sırayla İmsak→Yatsı olmalı.
 Future<void> updateNotification(
   String remainingTime,
   String nextPrayer,
@@ -226,8 +215,6 @@ Future<void> updateNotification(
   if (kIsWeb) return;
 
   try {
-    // Günün tüm vakitlerini "İmsak 05:12 · Güneş 06:45 · ..." şeklinde,
-    // sıradaki vakti en sona, kalan süreyle birlikte ekliyoruz.
     const sira = ["Imsak", "Gunes", "Ogle", "Ikindi", "Aksam", "Yatsi"];
     const gosterimAdi = {
       "Imsak": "İmsak",
@@ -285,7 +272,6 @@ Future<void> cancelNotification() async {
   }
 }
 
-// ==================== ZAMANLANMIŞ BİLDİRİMLER ====================
 Future<void> cancelAllScheduledNotifications() async {
   await flutterLocalNotificationsPlugin.cancelAll();
   debugPrint("✅ Tüm zamanlanmış bildirimler temizlendi");
@@ -299,7 +285,6 @@ Future<void> schedulePrayerNotifications(Map<String, String> vakitler) async {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
 
-  // Vakit anahtarlarını, API'den gelenler ile eşleşecek şekilde sabitledik
   final vakitList = [
     {"ad": "Imsak", "zaman": vakitler["Imsak"] ?? vakitler["İmsak"] ?? "--:--"},
     {"ad": "Gunes", "zaman": vakitler["Gunes"] ?? vakitler["Güneş"] ?? "--:--"},
@@ -330,13 +315,6 @@ Future<void> schedulePrayerNotifications(Map<String, String> vakitler) async {
       await _scheduleSingleNotification(
           vakitZamani, vakit["ad"]!, vakit["zaman"]!);
 
-      // 🔧 YENİ: "Bildirim çubuğu bir süre sonra duruyor, güncel değil"
-      // sorunu için — sabit/ongoing bildirim SADECE uygulama açıkken
-      // (Timer.periodic ile) güncelleniyordu. Artık her vakit sınırında
-      // (OS'un kendi alarmıyla, uygulama kapalıyken bile) sabit bildirim
-      // içeriği de tazeleniyor. Saniye saniye canlı geri sayım background'da
-      // teknik olarak mümkün değil (bunun için native bir foreground
-      // service gerekir), ama en azından bilgi asla saatlerce bayat kalmıyor.
       final vakitIndex = vakitList.indexOf(vakit);
       final sonrakiVakit =
           vakitIndex < vakitList.length - 1 ? vakitList[vakitIndex + 1] : null;
@@ -351,10 +329,6 @@ Future<void> schedulePrayerNotifications(Map<String, String> vakitler) async {
   debugPrint("✅ Tüm namaz vakitleri zamanlandı!");
 }
 
-// 🔧 YENİ: Sabit/ongoing bildirimi (id 999), uygulama kapalıyken bile her
-// vakit değiştiğinde OS alarmıyla tazeler. Canlı saniye saymaz (bu
-// arka planda mümkün değil) ama en fazla bir sonraki vakte kadar (birkaç
-// saat) bayat kalır — önceden ise saatlerce/gün boyu bayat kalabiliyordu.
 Future<void> _scheduleSabitBarYenile(
   DateTime zaman,
   String sonrakiVakitAdi,
@@ -431,8 +405,6 @@ Future<void> _scheduleSingleNotification(
     android: androidDetails,
   );
 
-  // 🔧 Android 14+'ta SCHEDULE_EXACT_ALARM izni yoksa exactAllowWhileIdle
-  // platform hatası fırlatabiliyor. İzin durumuna göre güvenli moda düşüyoruz.
   final tamZamanliIzinVar = await Permission.scheduleExactAlarm.isGranted;
   final scheduleMode = tamZamanliIzinVar
       ? AndroidScheduleMode.exactAllowWhileIdle
@@ -489,27 +461,15 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
     setState(() {
       isDarkMode = prefs.getBool('gece_modu') ?? false;
       _yaziBoyutuOlcegi = prefs.getDouble('yazi_boyutu_olcegi') ?? 1.0;
-      _yaziTipi = prefs.getString('yazi_tipi') ?? 'Schyler';
     });
   }
 
-  // 🔧 YENİ: Yazı boyutu ve yazı tipi artık uygulama genelinde,
-  // MaterialApp'in `builder`ı üzerinden TEK bir yerden ayarlanıyor. Bu
-  // sayede Ana Sayfa / Vakitler / Kur'an dahil hiçbir sayfanın kendi kodu
-  // değişmeden, isteyen kullanıcı tüm arayüzü büyük yazıyla kullanabiliyor.
   double _yaziBoyutuOlcegi = 1.0;
-  String _yaziTipi = 'Schyler';
 
   Future<void> _yaziBoyutunuKaydet(double deger) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('yazi_boyutu_olcegi', deger);
     setState(() => _yaziBoyutuOlcegi = deger);
-  }
-
-  Future<void> _yaziTipiniKaydet(String deger) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('yazi_tipi', deger);
-    setState(() => _yaziTipi = deger);
   }
 
   @override
@@ -531,7 +491,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
             isDarkMode ? const Color(0xFF2D1B2E) : const Color(0xFFF5E6E8),
         scaffoldBackgroundColor:
             isDarkMode ? const Color(0xFF1A1118) : const Color(0xFFFDF8F5),
-        fontFamily: _yaziTipi,
+        fontFamily: 'Schyler',
         appBarTheme: AppBarTheme(
           backgroundColor:
               isDarkMode ? const Color(0xFF2D1B2E) : const Color(0xFFFDF8F5),
@@ -586,8 +546,6 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
         bildirimIzniKaliciRed: _bildirimIzniKaliciRed,
         yaziBoyutuOlcegi: _yaziBoyutuOlcegi,
         onYaziBoyutuChanged: _yaziBoyutunuKaydet,
-        yaziTipi: _yaziTipi,
-        onYaziTipiChanged: _yaziTipiniKaydet,
       ),
     );
   }
@@ -646,10 +604,6 @@ class FlowerBackground extends StatelessWidget {
 }
 
 // ==================== ALT BİLGİ (FOOTER) ====================
-// 🔧 YENİ: Tekrar eden footer metni artık tek bir yerden yönetiliyor.
-// Ana Sayfa / Vakitler / Kur'an sayfaları kasıtlı olarak dokunulmadığı için
-// bu widget SADECE Kıble, Zikirmatik ve Ayarlar gibi diğer sayfalarda
-// kullanılıyor.
 class AltBilgiMetni extends StatelessWidget {
   final bool isDark;
   const AltBilgiMetni({super.key, required this.isDark});
@@ -671,198 +625,369 @@ class AltBilgiMetni extends StatelessWidget {
   }
 }
 
-// ==================== ÖZEL GÜNLER VE DOĞUM GÜNLERİ ====================
+// ==================== ÖZEL GÜNLER ====================
 class OzelGunler {
   static final List<Map<String, dynamic>> _ozelGunler = [
     {
-      'ad': '🌸 Ogretmenler Gunu',
+      'ad': '🌸 Öğretmenler Günü',
       'tarih': '2026-11-24',
       'aciklama':
-          'Basogretmen Mustafa Kemal Ataturk\'e ve tum ogretmenlere saygi ve sukran gunu.',
+          'Başöğretmen Mustafa Kemal Atatürk\'e ve tüm öğretmenlere saygı ve şükran günü.',
       'bildirim': true,
     },
     {
-      'ad': '🌷 Anneler Gunu',
+      'ad': '🌷 Anneler Günü',
       'tarih': '2026-05-11',
       'aciklama':
-          'Annelerimize sevgi, saygi ve sukran duygularimizi ifade ettigimiz ozel gun.',
+          'Annelerimize sevgi, saygı ve şükran duygularımızı ifade ettiğimiz özel gün.',
       'bildirim': true,
     },
     {
-      'ad': '🍒 Malatyalilar Gunu',
+      'ad': '🍒 Malatyalılar Günü',
       'tarih': '2026-05-15',
       'aciklama':
-          'Malatya\'nin dusman isgalinden kurtulusu, gurur ve dayanisma gunu.',
+          'Malatya\'nın düşman işgalinden kurtuluşu, gurur ve dayanışma günü.',
       'bildirim': true,
     },
     {
-      'ad': '👩‍💻 Kadin Yazilimcilar Gunu',
+      'ad': '👩‍💻 Kadın Yazılımcılar Günü',
       'tarih': '2026-10-13',
       'aciklama':
-          'Kadin yazilimcilarin teknoloji dunyasindaki basarilarini kutladigimiz ozel gun.',
+          'Kadın yazılımcıların teknoloji dünyasındaki başarılarını kutladığımız özel gün.',
       'bildirim': true,
     },
     {
-      'ad': '🎓 Akademisyenler Gunu',
+      'ad': '🎓 Akademisyenler Günü',
       'tarih': '2026-05-19',
       'aciklama':
-          'Genclik ve Spor Bayrami, Ataturk\'u Anma, tum akademisyenlerin gunu.',
+          'Gençlik ve Spor Bayramı, Atatürk\'ü Anma, tüm akademisyenlerin günü.',
       'bildirim': true,
     },
     {
-      'ad': '💪 Fizyoterapistler Gunu',
+      'ad': '💪 Fizyoterapistler Günü',
       'tarih': '2026-09-08',
       'aciklama':
-          'Fizyoterapistlerin saglik alanindaki onemli katkilarinin kutlandigi gun.',
+          'Fizyoterapistlerin sağlık alanındaki önemli katkılarının kutlandığı gün.',
       'bildirim': true,
     },
   ];
 
-  static final List<Map<String, dynamic>> _diniGunler = [
+  static final List<Map<String, dynamic>> _diniGunlerHicri = [
     {
-      'ad': '🕌 Mirac Kandili',
-      'tarih': '2026-01-15',
-      'aciklama': 'Hz. Muhammed (s.a.v.)\'in goge yukseldigi gece.',
-      'bildirim': false
+      'ad': '🕌 Regaib Kandili',
+      'hicriGun': -1,
+      'hicriAy': 7,
+      'aciklama': 'Üç ayların başlangıcı, rahmet ve bereket gecesi.'
+    },
+    {
+      'ad': '🕌 Miraç Kandili',
+      'hicriGun': 27,
+      'hicriAy': 7,
+      'aciklama': 'Hz. Muhammed (s.a.v.)\'in göğe yükseldiği gece.'
     },
     {
       'ad': '🕌 Berat Kandili',
-      'tarih': '2026-02-02',
-      'aciklama': 'Gunahlarin affedildigi, rahmet kapilarinin acildigi gece.',
-      'bildirim': false
+      'hicriGun': 15,
+      'hicriAy': 8,
+      'aciklama': 'Günahların affedildiği, rahmet kapılarının açıldığı gece.'
     },
     {
-      'ad': '🕌 Ramazan Baslangici',
-      'tarih': '2026-02-19',
-      'aciklama': 'Oruc ibadetinin basladigi mubarek ay.',
-      'bildirim': false
+      'ad': '🕌 Ramazan Başlangıcı',
+      'hicriGun': 1,
+      'hicriAy': 9,
+      'aciklama': 'Oruç ibadetinin başladığı mübarek ay.'
     },
     {
       'ad': '🕌 Kadir Gecesi',
-      'tarih': '2026-03-16',
-      'aciklama': 'Kur\'an\'in indirildigi, bin aydan hayirli gece.',
-      'bildirim': false
+      'hicriGun': 27,
+      'hicriAy': 9,
+      'aciklama': 'Kur\'an\'ın indirildiği, bin aydan hayırlı gece.'
     },
     {
-      'ad': '🕌 Ramazan Bayrami',
-      'tarih': '2026-03-20',
+      'ad': '🕌 Ramazan Bayramı',
+      'hicriGun': 1,
+      'hicriAy': 10,
       'aciklama':
-          'Ramazan ayinin sonunda oruc ibadetinin tamamlandigi, sukur ve kardeslik bayrami.',
-      'bildirim': false
+          'Ramazan ayının sonunda oruç ibadetinin tamamlandığı, şükür ve kardeşlik bayramı.'
     },
     {
-      'ad': '🕌 Kurban Bayrami',
-      'tarih': '2026-05-27',
-      'aciklama': 'Hac ibadetinin sembolu, fedakarlik ve paylasma bayrami.',
-      'bildirim': false
+      'ad': '🕌 Kurban Bayramı',
+      'hicriGun': 10,
+      'hicriAy': 12,
+      'aciklama': 'Hac ibadetinin sembolü, fedakarlık ve paylaşma bayramı.'
     },
     {
-      'ad': '🕌 Hicri Yilbasi',
-      'tarih': '2026-06-16',
-      'aciklama': 'Hicri takvimin baslangici, yeni bir yil.',
-      'bildirim': false
+      'ad': '🕌 Hicri Yılbaşı',
+      'hicriGun': 1,
+      'hicriAy': 1,
+      'aciklama': 'Hicri takvimin başlangıcı, yeni bir yıl.'
     },
     {
-      'ad': '🕌 Asure Gunu',
-      'tarih': '2026-06-25',
-      'aciklama': 'Bircok onemli olayin yasandigi, paylasma ve bereket gunu.',
-      'bildirim': false
+      'ad': '🕌 Aşure Günü',
+      'hicriGun': 10,
+      'hicriAy': 1,
+      'aciklama': 'Birçok önemli olayın yaşandığı, paylaşma ve bereket günü.'
     },
     {
       'ad': '🕌 Mevlid Kandili',
-      'tarih': '2026-08-24',
-      'aciklama': 'Hz. Muhammed (s.a.v.)\'in dogdugu mubarek gece.',
-      'bildirim': false
-    },
-    {
-      'ad': '🕌 Regaib Kandili',
-      'tarih': '2026-12-10',
-      'aciklama': 'Uc aylarin baslangici, rahmet ve bereket gecesi.',
-      'bildirim': false
+      'hicriGun': 12,
+      'hicriAy': 3,
+      'aciklama': 'Hz. Muhammed (s.a.v.)\'in doğduğu mübarek gece.'
     },
   ];
 
+  static List<Map<String, dynamic>>? _diniGunlerCache;
+
+  static Future<void> diniGunleriHazirla() async {
+    if (kIsWeb) return;
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final bugun = DateFormat('dd-MM-yyyy').format(DateTime.now());
+      final gToHYanit = await http
+          .get(Uri.parse('https://api.aladhan.com/v1/gToH/$bugun'))
+          .timeout(const Duration(seconds: 10));
+      final hicriYilBugun =
+          int.parse(jsonDecode(gToHYanit.body)['data']['hijri']['year']);
+
+      final cacheliYil = prefs.getInt('dini_gun_cache_hicri_yil');
+      final cacheliJson = prefs.getString('dini_gun_cache_json');
+      if (cacheliYil == hicriYilBugun && cacheliJson != null) {
+        _diniGunlerCache =
+            (jsonDecode(cacheliJson) as List).cast<Map<String, dynamic>>();
+        return;
+      }
+
+      final List<Map<String, dynamic>> hesaplanan = [];
+      final simdi = DateTime.now();
+      final bugunYalin = DateTime(simdi.year, simdi.month, simdi.day);
+
+      for (var gun in _diniGunlerHicri) {
+        try {
+          DateTime? secilenTarih;
+          for (final yil in [hicriYilBugun, hicriYilBugun + 1]) {
+            DateTime? aday;
+            if (gun['hicriGun'] == -1) {
+              final birRecep = await _hToGCevir(1, gun['hicriAy'], yil);
+              if (birRecep != null) {
+                aday = birRecep;
+                while (aday!.weekday != DateTime.friday) {
+                  aday = aday.add(const Duration(days: 1));
+                }
+              }
+            } else {
+              aday = await _hToGCevir(gun['hicriGun'], gun['hicriAy'], yil);
+            }
+            if (aday != null &&
+                !aday.isBefore(bugunYalin) &&
+                (secilenTarih == null || aday.isBefore(secilenTarih))) {
+              secilenTarih = aday;
+            }
+          }
+          if (secilenTarih != null) {
+            hesaplanan.add({
+              'ad': gun['ad'],
+              'tarih': DateFormat('yyyy-MM-dd').format(secilenTarih),
+              'aciklama': gun['aciklama'],
+              'bildirim': false,
+            });
+          }
+        } catch (e) {
+          debugPrint("❌ ${gun['ad']} hesaplanamadı: $e");
+        }
+      }
+
+      _diniGunlerCache = hesaplanan;
+      await prefs.setInt('dini_gun_cache_hicri_yil', hicriYilBugun);
+      await prefs.setString('dini_gun_cache_json', jsonEncode(hesaplanan));
+      debugPrint(
+          "✅ Dini günler Hicri ${hicriYilBugun}/${hicriYilBugun + 1} için hesaplandı");
+    } catch (e) {
+      debugPrint("❌ Dini günler hazırlanamadı (internet yok olabilir): $e");
+      final cacheliJson = prefs.getString('dini_gun_cache_json');
+      if (cacheliJson != null) {
+        _diniGunlerCache =
+            (jsonDecode(cacheliJson) as List).cast<Map<String, dynamic>>();
+      } else {
+        _diniGunlerCache = [];
+      }
+    }
+  }
+
+  static Future<DateTime?> _hToGCevir(int gun, int ay, int yil) async {
+    final hicriTarih =
+        '${gun.toString().padLeft(2, '0')}-${ay.toString().padLeft(2, '0')}-$yil';
+    final yanit = await http
+        .get(Uri.parse('https://api.aladhan.com/v1/hToG/$hicriTarih'))
+        .timeout(const Duration(seconds: 10));
+    if (yanit.statusCode != 200) return null;
+    final g = jsonDecode(yanit.body)['data']['gregorian'];
+    return DateTime(
+      int.parse(g['year']),
+      int.parse(g['month']['number'].toString()),
+      int.parse(g['day']),
+    );
+  }
+
+  static List<Map<String, dynamic>> get _diniGunler => _diniGunlerCache ?? [];
+
   static final List<Map<String, dynamic>> _milliGunler = [
     {
-      'ad': '🇹🇷 Ulusal Egemenlik ve Cocuk Bayrami',
+      'ad': '🇹🇷 İstiklal Marşı\'nın Kabulü ve Mehmet Akif Ersoy\'u Anma Günü',
+      'tarih': '2026-03-12',
+      'aciklama':
+          'İstiklal Marşı\'nın TBMM tarafından kabul edildiği gün ve şairi Mehmet Akif Ersoy\'u anma günü.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Çanakkale Zaferi ve Şehitleri Anma Günü',
+      'tarih': '2026-03-18',
+      'aciklama':
+          'Çanakkale deniz zaferi ve bu uğurda şehit düşenleri anma günü.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Ulusal Egemenlik ve Çocuk Bayramı',
       'tarih': '2026-04-23',
       'aciklama':
-          'Turkiye Buyuk Millet Meclisi\'nin acilisi ve cocuklara armagan edilen bayram.',
+          'Türkiye Büyük Millet Meclisi\'nin açılışı ve çocuklara armağan edilen bayram.',
       'bildirim': false
     },
     {
-      'ad': '🇹🇷 Ataturk\'u Anma ve Genclik ve Spor Bayrami',
+      'ad': '🇹🇷 Emek ve Dayanışma Günü',
+      'tarih': '2026-05-01',
+      'aciklama': 'İşçi hakları ve emeğin değerine dikkat çekilen gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Atatürk\'ü Anma ve Gençlik ve Spor Bayramı',
       'tarih': '2026-05-19',
       'aciklama':
-          'Mustafa Kemal Ataturk\'un Samsun\'a cikisi ve genclige armagani.',
+          'Mustafa Kemal Atatürk\'ün Samsun\'a çıkışı ve gençliğe armağanı.',
       'bildirim': false
     },
     {
-      'ad': '🇹🇷 Demokrasi ve Milli Birlik Gunu',
+      'ad': '🇹🇷 Demokrasi ve Milli Birlik Günü',
       'tarih': '2026-07-15',
       'aciklama':
-          '15 Temmuz darbe girisimine karsi milletin demokrasi ve bagimsizlik mucadelesi.',
+          '15 Temmuz darbe girişimine karşı milletin demokrasi ve bağımsızlık mücadelesi.',
       'bildirim': false
     },
     {
-      'ad': '🇹🇷 Zafer Bayrami',
+      'ad': '🇹🇷 Zafer Bayramı',
       'tarih': '2026-08-30',
       'aciklama':
-          'Buyuk Taarruz\'un zaferle sonuclanmasi, Turk ordusunun kahramanligi.',
+          'Büyük Taarruz\'un zaferle sonuçlanması, Türk ordusunun kahramanlığı.',
       'bildirim': false
     },
     {
-      'ad': '🇹🇷 Cumhuriyet Bayrami',
+      'ad': '🇹🇷 Gaziler Günü',
+      'tarih': '2026-09-19',
+      'aciklama': 'Gazilerimizi minnet ve şükranla anıyoruz.',
+      'bildirim': false
+    },
+    {
+      'ad': '🇹🇷 Cumhuriyet Bayramı',
       'tarih': '2026-10-29',
       'aciklama':
-          'Turkiye Cumhuriyeti\'nin ilani, bagimsizlik ve cagdaslasma bayrami.',
+          'Türkiye Cumhuriyeti\'nin ilanı, bağımsızlık ve çağdaşlaşma bayramı.',
       'bildirim': false
     },
     {
-      'ad': '🇹🇷 Gaziler Gunu',
-      'tarih': '2026-09-19',
-      'aciklama': 'Gazilerimizi minnet ve sukranla aniyoruz.',
+      'ad': '🇹🇷 Atatürk\'ü Anma Günü',
+      'tarih': '2026-11-10',
+      'aciklama':
+          'Büyük Önder Mustafa Kemal Atatürk\'ü vefatının yıldönümünde saygıyla anma günü.',
       'bildirim': false
     },
   ];
 
   static final List<Map<String, dynamic>> _digerOzelGunler = [
     {
-      'ad': '🌍 Dunya Kadinlar Gunu',
+      'ad': '🌍 Dünya Kadınlar Günü',
       'tarih': '2026-03-08',
-      'aciklama': 'Kadin haklari ve esitlik mucadelesinin simgesi.',
+      'aciklama': 'Kadın hakları ve eşitlik mücadelesinin simgesi.',
       'bildirim': false
     },
     {
-      'ad': '💪 Dunya Engelliler Gunu',
+      'ad': '🌳 Dünya Orman Günü',
+      'tarih': '2026-03-21',
+      'aciklama': 'Ormanların önemine dikkat çeken uluslararası gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '💧 Dünya Su Günü',
+      'tarih': '2026-03-22',
+      'aciklama': 'Temiz suya erişimin önemine dikkat çekilen gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '🩺 Dünya Sağlık Günü',
+      'tarih': '2026-04-07',
+      'aciklama': 'Halk sağlığının önemine dikkat çekilen gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '📚 Dünya Kitap Günü',
+      'tarih': '2026-04-23',
+      'aciklama':
+          'Kitap okumanın ve telif haklarının önemine dikkat çeken gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '🌏 Dünya Çevre Günü',
+      'tarih': '2026-06-05',
+      'aciklama': 'Çevre bilincini artırmak için kutlanan uluslararası gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '👨‍👩‍👧 Dünya Nüfus Günü',
+      'tarih': '2026-07-11',
+      'aciklama': 'Nüfus meselelerine dikkat çeken uluslararası gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '🕊️ Dünya Barış Günü',
+      'tarih': '2026-09-21',
+      'aciklama': 'Dünya barışı için umut ve birlik mesajı.',
+      'bildirim': false
+    },
+    {
+      'ad': '👴 Dünya Yaşlılar Günü',
+      'tarih': '2026-10-01',
+      'aciklama': 'Yaşlı bireylere saygı ve destek günü.',
+      'bildirim': false
+    },
+    {
+      'ad': '👩‍🏫 Dünya Öğretmenler Günü',
+      'tarih': '2026-10-05',
+      'aciklama':
+          'UNESCO tarafından ilan edilen, öğretmenlerin katkılarını kutlayan gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '🍎 Dünya Gıda Günü',
+      'tarih': '2026-10-16',
+      'aciklama': 'Açlıkla mücadele ve gıda güvenliğine dikkat çeken gün.',
+      'bildirim': false
+    },
+    {
+      'ad': '💪 Dünya Engelliler Günü',
       'tarih': '2026-12-03',
       'aciklama':
-          'Engelli bireylerin haklarina dikkat cekmek icin birlesiyoruz.',
+          'Engelli bireylerin haklarına dikkat çekmek için birleşiyoruz.',
       'bildirim': false
     },
     {
-      'ad': '🌍 Dunya Cocuk Haklari Gunu',
+      'ad': '🌍 Dünya Çocuk Hakları Günü',
       'tarih': '2026-11-20',
       'aciklama':
-          'Cocuk haklarinin korunmasi ve gelistirilmesi icin farkindalik gunu.',
+          'Çocuk haklarının korunması ve geliştirilmesi için farkındalık günü.',
       'bildirim': false
     },
     {
-      'ad': '🌍 Dunya Baris Gunu',
-      'tarih': '2026-09-21',
-      'aciklama': 'Dunya barisi icin umut ve birlik mesaji.',
-      'bildirim': false
-    },
-    {
-      'ad': '🌍 Dunya Felsefe Gunu',
-      'tarih': '2026-11-20',
-      'aciklama': 'Dusunme ve sorgulama sanatini kutluyoruz.',
-      'bildirim': false
-    },
-    {
-      'ad': '🕯️ Insan Haklari Gunu',
+      'ad': '🕯️ İnsan Hakları Günü',
       'tarih': '2026-12-10',
-      'aciklama': 'Insan haklarinin evrenselligine vurgu yapiyoruz.',
+      'aciklama': 'İnsan haklarının evrenselliğine vurgu yapıyoruz.',
       'bildirim': false
     },
   ];
@@ -916,7 +1041,7 @@ class OzelGunler {
         return {
           'ad': gun['ad'],
           'kalanGun': 0,
-          'kalanGunText': '🌸 BUGUN 🌸',
+          'kalanGunText': '🌸 BUGÜN 🌸',
           'aciklama': gun['aciklama'],
           'tarih': gun['tarih'],
           'bildirim': gun['bildirim'] ?? false,
@@ -925,7 +1050,7 @@ class OzelGunler {
         return {
           'ad': gun['ad'],
           'kalanGun': kalanGun,
-          'kalanGunText': '$kalanGun gun sonra 🌷',
+          'kalanGunText': '$kalanGun gün sonra 🌷',
           'aciklama': gun['aciklama'],
           'tarih': gun['tarih'],
           'bildirim': gun['bildirim'] ?? false,
@@ -959,7 +1084,7 @@ class OzelGunler {
   }
 }
 
-// ==================== GÜNLÜK İÇERİK ====================
+// ==================== GÜNLÜK İÇERİK SERVİSİ ====================
 class GunlukIcerikServisi {
   static int _getYilinGunu() {
     return int.parse(DateFormat("D").format(DateTime.now()));
@@ -980,47 +1105,132 @@ class GunlukIcerikServisi {
 
   static const List<String> ayetlerYedek = [
     "Allah sabredenlerle beraberdir. (Bakara, 153)",
-    "Suphesiz guclukle beraber bir kolaylik vardir. (Insirah, 5)",
-    "Eger sukrederseniz, elbette size nimetimi artiririm. (Ibrahim, 7)",
-    "Ben Rabbime tevekkul ettim. (Hud, 56)",
-    "Allah kuluna kafi degil midir? (Zumer, 36)",
-    "Rabbimiz! Bize katindan bir rahmet ver. (Kehf, 10)",
-    "Allah, adaleti, iyiligi ve akrabaya yardimi emreder. (Nahl, 90)",
-    "Kim zerre kadar iyilik yaparsa onu gorur. (Zilzal, 7)",
-    "Kim zerre kadar kotuluk yaparsa onu gorur. (Zilzal, 8)",
-    "De ki: 'O Allah birdir.' (Ihlas, 1)",
+    "Şüphesiz güçlükle beraber bir kolaylık vardır. (İnşirah, 5)",
+    "Eğer şükrederseniz, elbette size nimetimi artırırım. (İbrahim, 7)",
+    "Ben Rabbime tevekkül ettim. (Hud, 56)",
+    "Allah kuluna kâfi değil midir? (Zümer, 36)",
+    "Rabbimiz! Bize katından bir rahmet ver. (Kehf, 10)",
+    "Allah, adaleti, iyiliği ve akrabaya yardımı emreder. (Nahl, 90)",
+    "Kim zerre kadar iyilik yaparsa onu görür. (Zilzal, 7)",
+    "Kim zerre kadar kötülük yaparsa onu görür. (Zilzal, 8)",
+    "De ki: 'O Allah birdir.' (İhlas, 1)",
+  ];
+
+  static const int _nawawiHadisSayisi = 42;
+
+  static Future<String> gununHadisiGetir() async {
+    final yilinGunu = _getYilinGunu();
+    final hadisNo = (yilinGunu % _nawawiHadisSayisi) + 1;
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'gunun_hadisi_$yilinGunu';
+
+    final cached = prefs.getString(cacheKey);
+    if (cached != null) return cached;
+
+    try {
+      final uri = Uri.parse(
+        'https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/tur-nawawi/$hadisNo.json',
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final hadisler = data['hadiths'] as List;
+        if (hadisler.isNotEmpty) {
+          final metin = (hadisler[0]['text'] as String).trim();
+          final sonuc = "$metin\n(Nevevi'nin Kırk Hadis'i, Hadis $hadisNo)";
+          await prefs.setString(cacheKey, sonuc);
+          return sonuc;
+        }
+      }
+    } catch (_) {}
+    return hadisler[yilinGunu % hadisler.length];
+  }
+
+  static const List<List<int>> gununDuasiReferanslari = [
+    [2, 201],
+    [2, 286],
+    [3, 8],
+    [3, 147],
+    [3, 193],
+    [7, 23],
+    [14, 40],
+    [14, 41],
+    [20, 25],
+    [21, 87],
+    [21, 89],
+    [23, 118],
+    [25, 74],
+    [28, 24],
+    [59, 10],
+  ];
+
+  static const List<String> dualarYedek = [
+    "Rabbenâ âtinâ fid-dünyâ haseneten ve fi'l-âhirati haseneten ve kınâ azâben-nâr. (Bakara, 201)",
+    "Rabbenâ lâ tuâhiznâ in nesînâ ev ahta'nâ. (Bakara, 286)",
+    "Rabbenâğfirlî ve li vâlideyye. (İbrahim, 41)",
+    "Rabbi zidnî ilmâ. (Tâhâ, 114)",
+    "Hasbunallâhu ve ni'mel vekîl. (Âl-i İmrân, 173)",
+    "Rabbi'şrahlî sadrî ve yessirlî emrî. (Tâhâ, 25-26)",
+    "Rabbenâ heb lenâ min ezvâcinâ ve zurriyyâtinâ kurrete a'yun. (Furkan, 74)",
   ];
 
   static const List<String> hadisler = [
-    "Namaz, dinin diregidir. (Tirmizi)",
-    "Kolaylastiriniz, zorlastirmayiniz; mujdeleyiniz, nefret ettirmeyiniz. (Buhari)",
-    "Ameller niyetlere goredir. (Buhari)",
-    "Musluman, Muslumanin kardesidir. (Muslim)",
-    "Sizin en hayirliniz, ahlaki en guzel olaninizdir. (Buhari)",
-    "Veren el, alan elden hayirlidir. (Buhari, Muslim)",
-    "Sizden biriniz, kendisi icin istedigi kardesi icin de istemedikce gercek anlamda iman etmis olmaz. (Buhari, Muslim)",
-    "Gulumseyen bile senin icin bir sadakadir. (Tirmizi)",
-    "Allah guzeldir, guzelligi sever. (Muslim)",
-    "Iyilik, guzel ahlaktir. (Muslim)",
+    "Namaz, dinin direğidir. (Tirmizî)",
+    "Kolaylaştırınız, zorlaştırmayınız; müjdeleyiniz, nefret ettirmeyiniz. (Buhârî)",
+    "Ameller niyetlere göredir. (Buhârî)",
+    "Müslüman, Müslümanın kardeşidir. (Müslim)",
+    "Sizin en hayırlınız, ahlakı en güzel olanınızdır. (Buhârî)",
+    "Veren el, alan elden hayırlıdır. (Buhârî, Müslim)",
+    "Sizden biriniz, kendisi için istediği kardeşi için de istemedikçe gerçek anlamda iman etmiş olmaz. (Buhârî, Müslim)",
+    "Gülümseyen bile senin için bir sadakadır. (Tirmizî)",
+    "Allah güzeldir, güzelliği sever. (Müslim)",
+    "İyilik, güzel ahlaktır. (Müslim)",
   ];
 
   static const List<String> dualar = [
-    "Rabbim! Bana ve aileme hayirli evlat ver.",
-    "Allah'imi Kalbimi dinin uzere sabit kil.",
-    "Rabbenâ atinâ fid-dunya haseneten ve fil ahirati haseneten ve kina azaben-nar. (Bakara, 201)",
-    "Rabbi zidnî ilma. (Taha, 114)",
-    "Allah'imi Beni senden uzaklastiracak her seyden koru.",
-    "Rabbenağfirli ve li valideyye. (Ibrahim, 41)",
-    "Hasbunallahu ve ni'mel vekil. (Al-i Imran, 173)",
+    "Rabbim! Bana ve aileme hayırlı evlat ver.",
+    "Allah'ım! Kalbimi dinin üzere sabit kıl.",
+    "Rabbenâ âtinâ fid-dünyâ haseneten ve fi'l-âhirati haseneten ve kınâ azâben-nâr. (Bakara, 201)",
+    "Rabbi zidnî ilma. (Tâhâ, 114)",
+    "Allah'ım! Beni senden uzaklaştıracak her şeyden koru.",
+    "Rabbenâğfirli ve li vâlideyye. (İbrahim, 41)",
+    "Hasbunallâhu ve ni'mel vekîl. (Âl-i İmrân, 173)",
   ];
 
   static const List<String> esmalar = [
-    "Er-Rahman (Dunyada her canliya merhamet eden)",
-    "Er-Rahim (Ahirette sadece muminlere merhamet eden)",
-    "El-Melik (Mulkun, evrenin mutlak sahibi)",
-    "El-Kuddus (Her turlu eksiklikten uzak olan)",
-    "Es-Selam (Kullarini selamete cikaran)",
+    "Er-Rahmân (Dünyada her canlıya merhamet eden)",
+    "Er-Rahîm (Ahirette sadece müminlere merhamet eden)",
+    "El-Melik (Mülkün, evrenin mutlak sahibi)",
+    "El-Kuddûs (Her türlü eksiklikten uzak olan)",
+    "Es-Selâm (Kullarını selamete çıkaran)",
   ];
+
+  static Future<String> gununDuasiGetir() async {
+    final yilinGunu = _getYilinGunu();
+    final ref =
+        gununDuasiReferanslari[yilinGunu % gununDuasiReferanslari.length];
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'gunun_duasi_$yilinGunu';
+
+    final cached = prefs.getString(cacheKey);
+    if (cached != null) return cached;
+
+    try {
+      final uri = Uri.parse(
+        'https://api.alquran.cloud/v1/ayah/${ref[0]}:${ref[1]}/editions/quran-uthmani,tr.diyanet',
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body)['data'] as List;
+        final arapca = data[0]['text'] as String;
+        final meal = data[1]['text'] as String;
+        final sonuc = "$arapca\n\"$meal\" (${_sureAdi(ref[0])}, ${ref[1]})";
+        await prefs.setString(cacheKey, sonuc);
+        return sonuc;
+      }
+    } catch (_) {}
+    return dualarYedek[yilinGunu % dualarYedek.length];
+  }
 
   static Future<String> gununAyetiGetir() async {
     final yilinGunu = _getYilinGunu();
@@ -1093,118 +1303,118 @@ class KuranApiServisi {
   static const List<String> resmiSureIsimleri = [
     "Fatiha",
     "Bakara",
-    "Al-i Imran",
-    "Nisa",
-    "Maide",
-    "En'am",
-    "A'raf",
-    "Enfal",
+    "Âl-i İmrân",
+    "Nisâ",
+    "Mâide",
+    "En'âm",
+    "A'râf",
+    "Enfâl",
     "Tevbe",
-    "Yunus",
-    "Hud",
-    "Yusuf",
+    "Yûnus",
+    "Hûd",
+    "Yûsuf",
     "Ra'd",
-    "Ibrahim",
+    "İbrâhîm",
     "Hicr",
     "Nahl",
-    "Isra",
+    "İsrâ",
     "Kehf",
     "Meryem",
-    "Taha",
-    "Enbiya",
+    "Tâhâ",
+    "Enbiyâ",
     "Hac",
-    "Mu'minun",
-    "Nur",
-    "Furkan",
-    "Suara",
+    "Mü'minûn",
+    "Nûr",
+    "Furkân",
+    "Şu'arâ",
     "Neml",
     "Kasas",
-    "Ankebut",
-    "Rum",
-    "Lokman",
+    "Ankebût",
+    "Rûm",
+    "Lokmân",
     "Secde",
-    "Ahzab",
-    "Sebe",
-    "Fatir",
-    "Yasin",
-    "Saffat",
-    "Sad",
-    "Zumer",
-    "Mu'min",
+    "Ahzâb",
+    "Sebe'",
+    "Fâtır",
+    "Yâsîn",
+    "Sâffât",
+    "Sâd",
+    "Zümer",
+    "Mü'min",
     "Fussilet",
-    "Sura",
+    "Şûrâ",
     "Zuhruf",
-    "Duhan",
-    "Casiye",
-    "Ahkaf",
+    "Duhân",
+    "Câsiye",
+    "Ahkâf",
     "Muhammed",
     "Fetih",
-    "Hucurat",
-    "Kaf",
-    "Zariyat",
-    "Tur",
+    "Hucurât",
+    "Kâf",
+    "Zâriyât",
+    "Tûr",
     "Necm",
     "Kamer",
-    "Rahman",
-    "Vakia",
-    "Hadid",
-    "Mucadele",
-    "Hasr",
-    "Mumtehine",
+    "Rahmân",
+    "Vâkıa",
+    "Hadîd",
+    "Mücâdele",
+    "Haşr",
+    "Mümtehine",
     "Saf",
     "Cuma",
-    "Munafikun",
-    "Tegabun",
-    "Talak",
-    "Tahrim",
-    "Mulk",
+    "Münâfikûn",
+    "Teğâbün",
+    "Talâk",
+    "Tahrîm",
+    "Mülk",
     "Kalem",
-    "Hakka",
+    "Hâkka",
     "Meâric",
-    "Nuh",
+    "Nûh",
     "Cin",
-    "Muzzemmil",
-    "Muddessir",
-    "Kiâme",
-    "Insan",
-    "Murselat",
+    "Müzzemmil",
+    "Müddessir",
+    "Kıyâme",
+    "İnsân",
+    "Mürselât",
     "Nebe",
-    "Naziat",
+    "Nâziât",
     "Abese",
-    "Tekvir",
-    "Infitâr",
-    "Mutaffifin",
-    "Insikak",
-    "Buruc",
-    "Tarik",
-    "A'la",
-    "Gasiye",
+    "Tekvîr",
+    "İnfitâr",
+    "Mutaffifîn",
+    "İnşikâk",
+    "Burûc",
+    "Târık",
+    "A'lâ",
+    "Gâşiye",
     "Fecr",
     "Beled",
-    "Sems",
+    "Şems",
     "Leyl",
-    "Duha",
-    "Insirah",
-    "Tin",
+    "Duhâ",
+    "İnşirâh",
+    "Tîn",
     "Alak",
-    "Kadir",
+    "Kadr",
     "Beyyine",
-    "Zilzal",
-    "Adiyat",
-    "Karia",
-    "Tekasur",
+    "Zilzâl",
+    "Âdiyât",
+    "Kâria",
+    "Tekâsür",
     "Asr",
-    "Humeze",
-    "Fil",
-    "Kureys",
-    "Maun",
+    "Hümeze",
+    "Fîl",
+    "Kureyş",
+    "Mâûn",
     "Kevser",
-    "Kafirun",
+    "Kâfirûn",
     "Nasr",
     "Tebbet",
-    "Ihlas",
+    "İhlâs",
     "Felak",
-    "Nas",
+    "Nâs"
   ];
 
   static Future<List<Sureci>> tumSureleriGetir({
@@ -1225,7 +1435,7 @@ class KuranApiServisi {
         await http.get(Uri.parse(_apiUrl)).timeout(const Duration(seconds: 30));
 
     if (response.statusCode != 200) {
-      throw Exception("Kur'an verisi alinamadi (kod: ${response.statusCode})");
+      throw Exception("Kur'an verisi alınamadı (kod: ${response.statusCode})");
     }
 
     final sureler = _apiYanitindanUret(response.body);
@@ -1372,7 +1582,7 @@ class _KuranWebViewState extends State<KuranWebView> {
             ),
             const SizedBox(height: 16),
             Text(
-              "🌺 Kuran sayfasi yuklenirken hata olustu.\nInternet baglantinizi kontrol edin.",
+              "🌺 Kuran sayfası yüklenirken hata oluştu.\nİnternet bağlantınızı kontrol edin.",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
@@ -1412,178 +1622,7 @@ class _KuranWebViewState extends State<KuranWebView> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(
-            "🌸 Bu uygulama AYSE NUR tarafindan annesi icin hazirlanmistir 🌸",
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: widget.isDark ? Colors.white38 : Colors.black45,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ==================== KIBLE WEB VIEW ====================
-class KibleWebView extends StatefulWidget {
-  final bool isDark;
-
-  const KibleWebView({super.key, required this.isDark});
-
-  @override
-  State<KibleWebView> createState() => _KibleWebViewState();
-}
-
-class _KibleWebViewState extends State<KibleWebView> {
-  late WebViewController _controller;
-  bool _isLoading = true;
-  bool _hasError = false;
-  bool _konumIzniVerildi = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _kibleSayfasiniYukle();
-  }
-
-  Future<void> _kibleSayfasiniYukle() async {
-    if (!kIsWeb) {
-      final konumStatus = await Permission.location.status;
-      if (!konumStatus.isGranted) {
-        await Permission.location.request();
-      }
-      _konumIzniVerildi = await Permission.location.isGranted;
-      debugPrint("📍 Konum izni: $_konumIzniVerildi");
-    }
-
-    try {
-      _controller = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(
-            widget.isDark ? const Color(0xFF1A1118) : Colors.white)
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onPageFinished: (String url) {
-              setState(() {
-                _isLoading = false;
-              });
-            },
-            onWebResourceError: (WebResourceError error) {
-              setState(() {
-                _isLoading = false;
-                _hasError = true;
-              });
-            },
-          ),
-        )
-        ..loadRequest(Uri.parse('https://qiblafinder.withgoogle.com/intl/tr/'));
-
-      if (!kIsWeb) {
-        try {
-          final androidController = _controller.platform;
-          if (androidController is AndroidWebViewController) {
-            androidController.setGeolocationEnabled(true);
-          }
-        } catch (e) {
-          debugPrint("WebView Geolocation ayari hatasi: $e");
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _hasError = true;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_hasError) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 60,
-              color: widget.isDark ? Colors.white54 : Colors.black54,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "🕋 Kible sayfasi yuklenirken hata olustu.\nInternet baglantinizi kontrol edin.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: widget.isDark ? Colors.white70 : Colors.black54,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _hasError = false;
-                  _isLoading = true;
-                  _kibleSayfasiniYukle();
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB5627A),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text("Yeniden Dene 🌸"),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (!_konumIzniVerildi && !kIsWeb) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.location_off,
-              size: 60,
-              color: widget.isDark ? Colors.white54 : Colors.black54,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "📍 Konum izni verilmedi.\nKible bulucu icin konum izni gereklidir.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: widget.isDark ? Colors.white70 : Colors.black54,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                openAppSettings();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB5627A),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text("Ayarlara Git 🌸"),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Stack(
-      children: [
-        WebViewWidget(controller: _controller),
-        if (_isLoading)
-          const Center(
-            child: CircularProgressIndicator(color: Color(0xFFB5627A)),
-          ),
+        AltBilgiMetni(isDark: widget.isDark),
       ],
     );
   }
@@ -1607,13 +1646,11 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
     "Elhamdulillah",
     "Allahu Ekber",
     "La ilahe illallah",
-    "Estagfirullah",
+    "Estağfirullah",
   ];
   int _seciliZikirIndex = 0;
   String _yeniZikir = "";
   int _yeniZikirHedefi = 33;
-  // 🔧 YENİ: Her zikrin kendi hedef sayısı olabiliyor artık (zikir metni ->
-  // hedef). Önceden tek bir global hedef tüm zikirler için ortaktı.
   Map<String, int> _zikirHedefleri = {};
 
   @override
@@ -1700,7 +1737,7 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
-                Text("🌸 ${_zikirler[_seciliZikirIndex]} zikri tamamlandi!"),
+                Text("🌸 ${_zikirler[_seciliZikirIndex]} zikri tamamlandı!"),
             backgroundColor: const Color(0xFFB5627A),
             duration: const Duration(seconds: 2),
           ),
@@ -1726,11 +1763,6 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
     final isSmallScreen = screenHeight < 700;
 
     return Scaffold(
-      // 🔧 DÜZELTME: Önceki sürümde klavye açılınca (yeni zikir eklerken)
-      // sabit yükseklikli Column taşıyor, "Ekle" butonu diğer elemanlarla
-      // üst üste biniyordu. Tüm içeriği kaydırılabilir yapıp `Expanded`ı
-      // kaldırdık — artık klavye açıldığında sayfa kayıyor, hiçbir şey
-      // üst üste binmiyor.
       resizeToAvoidBottomInset: true,
       body: FlowerBackground(
         isDark: widget.isDark,
@@ -1943,7 +1975,7 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
                         ElevatedButton.icon(
                           onPressed: _sifirla,
                           icon: const Icon(Icons.restart_alt),
-                          label: const Text("Sifirla"),
+                          label: const Text("Sıfırla"),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: widget.isDark
                                 ? Colors.white24
@@ -2081,8 +2113,6 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      // 🔧 YENİ: Eklenecek zikrin hedef sayısı artık ayrı bir
-                      // hücrede, ekleme kutusunun hemen altında belirleniyor.
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 4),
@@ -2145,7 +2175,7 @@ class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
   }
 }
 
-// ==================== KIBLE PUSULASI (NATIVE) ====================
+// ==================== KIBLE PUSULASI ====================
 class KiblePusulasi extends StatefulWidget {
   final bool isDark;
 
@@ -2159,63 +2189,58 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
   double _heading = 0.0;
   bool _pusulaVar = true;
 
-  // 🔧 YENİ: Önceki sürümde sadece 13 şehir için elle girilmiş, coğrafi
-  // olarak hatalı bir açı tablosu vardı ve bilinmeyen şehirler sessizce
-  // "Mus" açısına düşüyordu. Artık 81 ilin gerçek enlem/boylam'ı ile
-  // büyük daire (great-circle bearing) formülü kullanılıyor — her il için
-  // doğru sonuç verir.
   final Map<String, List<double>> _ilKoordinat = {
     "Adana": [37.0, 35.3213333],
-    "Adiyaman": [37.7641667, 38.2761667],
+    "Adıyaman": [37.7641667, 38.2761667],
     "Afyonkarahisar": [38.76376, 30.54034],
-    "Agri": [39.7216667, 43.0566667],
+    "Ağrı": [39.7216667, 43.0566667],
     "Amasya": [40.65, 35.8333333],
     "Ankara": [39.92077, 32.85411],
     "Antalya": [36.88414, 30.70563],
     "Artvin": [41.1833333, 41.8166667],
-    "Aydin": [37.8444, 27.8458],
-    "Balikesir": [39.648369, 27.8826100],
+    "Aydın": [37.8444, 27.8458],
+    "Balıkesir": [39.648369, 27.8826100],
     "Bilecik": [40.150131, 29.983061],
-    "Bingol": [38.8853490, 40.4982910],
+    "Bingöl": [38.8853490, 40.4982910],
     "Bitlis": [38.4, 42.1166667],
     "Bolu": [40.7394790, 31.6115610],
     "Burdur": [37.7269090, 30.2888760],
     "Bursa": [40.18257, 29.06687],
-    "Canakkale": [40.1553120, 26.4141600],
-    "Cankiri": [40.6, 33.6166667],
-    "Corum": [40.5505556, 34.9555556],
+    "Çanakkale": [40.1553120, 26.4141600],
+    "Çankırı": [40.6, 33.6166667],
+    "Çorum": [40.5505556, 34.9555556],
     "Denizli": [37.77652, 29.08639],
-    "Diyarbakir": [37.91441, 40.2306290],
+    "Diyarbakır": [37.91441, 40.2306290],
     "Edirne": [41.6666667, 26.5666667],
-    "Elazig": [38.680969, 39.226398],
+    "Elazığ": [38.680969, 39.226398],
     "Erzincan": [39.75, 39.5],
     "Erzurum": [39.9043189, 41.2678853],
-    "Eskisehir": [39.784302, 30.51922],
+    "Eskişehir": [39.784302, 30.51922],
     "Gaziantep": [37.06622, 37.38332],
     "Giresun": [40.912811, 38.38953],
-    "Gumushane": [40.4602778, 39.4813889],
+    "Gümüşhane": [40.4602778, 39.4813889],
     "Hakkari": [37.5833333, 43.7333333],
     "Hatay": [36.4018488, 36.3498097],
     "Isparta": [37.7666667, 30.55],
     "Mersin": [36.8, 34.6333333],
-    "Istanbul": [41.00527, 28.97696],
-    "Izmir": [38.41885, 27.12872],
+    "İstanbul": [41.00527, 28.97696],
+    "İzmir": [38.41885, 27.12872],
     "Kars": [40.59267, 43.077831],
     "Kastamonu": [41.38871, 33.78273],
     "Kayseri": [38.7333333, 35.4833333],
-    "Kirklareli": [41.7333333, 27.2166667],
-    "Kirsehir": [39.15, 34.1666667],
+    "Kırklareli": [41.7333333, 27.2166667],
+    "Kırşehir": [39.15, 34.1666667],
     "Kocaeli": [40.8532704, 29.8815203],
     "Konya": [37.8666667, 32.4833333],
-    "Kutahya": [39.4166667, 29.9833333],
+    "Kütahya": [39.4166667, 29.9833333],
     "Malatya": [38.35519, 38.30946],
     "Manisa": [38.619099, 27.428921],
-    "Kahramanmaras": [37.5833333, 36.9333333],
+    "Kahramanmaraş": [37.5833333, 36.9333333],
     "Mardin": [37.3122361, 40.7351120],
-    "Mugla": [37.2152778, 28.3636111],
-    "Mus": [38.7432926, 41.5064823],
-    "Nevsehir": [38.62442, 34.723969],
-    "Nigde": [37.9666667, 34.6833333],
+    "Muğla": [37.2152778, 28.3636111],
+    "Muş": [38.7432926, 41.5064823],
+    "Nevşehir": [38.62442, 34.723969],
+    "Niğde": [37.9666667, 34.6833333],
     "Ordu": [40.9833333, 37.8833333],
     "Rize": [41.02005, 40.523449],
     "Sakarya": [40.7568793, 30.378138],
@@ -2223,44 +2248,69 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
     "Siirt": [37.94429, 41.93288],
     "Sinop": [42.0264222, 35.1550745],
     "Sivas": [39.747662, 37.017879],
-    "Tekirdag": [40.9833333, 27.5166667],
+    "Tekirdağ": [40.9833333, 27.5166667],
     "Tokat": [40.3166667, 36.55],
     "Trabzon": [41.0, 39.7333333],
     "Tunceli": [39.1079868, 39.5401672],
-    "Sanliurfa": [37.15, 38.8],
-    "Usak": [38.682301, 29.40819],
+    "Şanlıurfa": [37.15, 38.8],
+    "Uşak": [38.682301, 29.40819],
     "Van": [38.4941667, 43.38],
     "Yozgat": [39.82, 34.8044444],
     "Zonguldak": [41.456409, 31.798731],
     "Aksaray": [38.36869, 34.03698],
     "Bayburt": [40.255169, 40.22488],
     "Karaman": [37.17593, 33.228748],
-    "Kirikkale": [39.846821, 33.515251],
+    "Kırıkkale": [39.846821, 33.515251],
     "Batman": [37.881168, 41.13509],
-    "Sirnak": [37.5163889, 42.4611111],
-    "Bartin": [41.6344444, 32.3375],
+    "Şırnak": [37.5163889, 42.4611111],
+    "Bartın": [41.6344444, 32.3375],
     "Ardahan": [41.110481, 42.702171],
-    "Igdir": [39.9166667, 44.0333333],
+    "Iğdır": [39.9166667, 44.0333333],
     "Yalova": [40.65, 29.2666667],
-    "Karabuk": [41.2, 32.6333333],
+    "Karabük": [41.2, 32.6333333],
     "Kilis": [36.718399, 37.12122],
     "Osmaniye": [37.06805, 36.261589],
-    "Duzce": [40.843849, 31.15654],
+    "Düzce": [40.843849, 31.15654],
   };
 
-  // Kabe'nin koordinatları (sabit)
   static const double _kabeLat = 21.4225;
   static const double _kabeLon = 39.8262;
 
   double _kibleAcisi = 154.0;
-  String? _manuelIl; // Kullanıcının bu sayfaya özel elle seçtiği il (varsa)
-  String _kayitliSehir = "Mus"; // Uygulamanın genelinde seçili olan şehir
+  String? _manuelIl;
+  String _kayitliSehir = "Muş";
 
-  // 🔧 YENİ: GPS ile bulunan gerçek konum + Aladhan'ın ücretsiz Kıble API'si
-  // (https://api.aladhan.com/v1/qibla/{lat}/{lon}) — kendi hesaplamamız
-  // yerine bilinen, güvenilir bir kaynağın sonucunu kullanıyoruz.
-  String _konumKaynagi = "kayitli"; // "gps" | "kayitli" | "manuel"
-  int? _gpsDogrulukYildizi; // GPS konum hassasiyetine göre 1-5 yıldız
+  // 3 Farklı Kıble Kaynağı
+  Map<String, double> _kibleAcilar = {
+    'Aladhan': 0.0,
+    'Math': 0.0,
+    'Geo': 0.0,
+  };
+  String _seciliKaynak = "Aladhan";
+
+  final List<Map<String, dynamic>> _kibleKaynaklari = [
+    {
+      'id': 'Aladhan',
+      'ad': '🌙 Aladhan',
+      'aciklama': 'Uluslararası İslami API',
+      'yildiz': 5
+    },
+    {
+      'id': 'Math',
+      'ad': '📐 Matematiksel',
+      'aciklama': 'Büyük daire formülü',
+      'yildiz': 4
+    },
+    {
+      'id': 'Geo',
+      'ad': '🌍 Coğrafi',
+      'aciklama': 'Haversine formülü',
+      'yildiz': 4
+    },
+  ];
+
+  String _konumKaynagi = "kayitli";
+  int? _gpsDogrulukYildizi;
   bool _gpsYukleniyor = false;
   String? _gpsHata;
 
@@ -2273,10 +2323,6 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
     _konumBilgisiniYukle();
   }
 
-  // 🔧 YENİ: Büyük daire (great-circle) formülüyle iki koordinat arasındaki
-  // yön açısını (bearing) derece cinsinden hesaplar. SADECE GPS/API
-  // ulaşılamadığında (internetsizken) yedek olarak kullanılıyor; asıl
-  // kaynak Aladhan'ın kendi Kıble API'si.
   double _bearingHesapla(double lat1, double lon1, double lat2, double lon2) {
     final phi1 = lat1 * math.pi / 180;
     final phi2 = lat2 * math.pi / 180;
@@ -2288,16 +2334,28 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
     return (theta * 180 / math.pi + 360) % 360;
   }
 
-  // GPS konum hassasiyeti (metre) → yıldız. Tek bir "API" kıbleyi başka
-  // bir API'den daha "doğru" göstermez (ikisi de aynı matematiği kullanır);
-  // gerçek fark GPS sinyalinin hassasiyetinden gelir, o yüzden yıldızı
-  // buna göre veriyoruz.
-  int _dogrulukYildizHesapla(double metreDogruluk) {
-    if (metreDogruluk <= 10) return 5;
-    if (metreDogruluk <= 25) return 4;
-    if (metreDogruluk <= 50) return 3;
-    if (metreDogruluk <= 100) return 2;
-    return 1;
+  double _geoHesapla(double lat1, double lon1, double lat2, double lon2) {
+    final dLon = (lon2 - lon1) * math.pi / 180;
+    final lat1Rad = lat1 * math.pi / 180;
+    final lat2Rad = lat2 * math.pi / 180;
+    final x = math.sin(dLon) * math.cos(lat2Rad);
+    final y = math.cos(lat1Rad) * math.sin(lat2Rad) -
+        math.sin(lat1Rad) * math.cos(lat2Rad) * math.cos(dLon);
+    return (math.atan2(x, y) * 180 / math.pi + 360) % 360;
+  }
+
+  Future<void> _tumKibleAcilariniHesapla(double lat, double lon) async {
+    try {
+      final yanit = await http
+          .get(Uri.parse('https://api.aladhan.com/v1/qibla/$lat/$lon'));
+      final veri = jsonDecode(yanit.body);
+      _kibleAcilar['Aladhan'] = (veri['data']['direction'] as num).toDouble();
+    } catch (_) {
+      _kibleAcilar['Aladhan'] = _bearingHesapla(lat, lon, _kabeLat, _kabeLon);
+    }
+    _kibleAcilar['Math'] = _bearingHesapla(lat, lon, _kabeLat, _kabeLon);
+    _kibleAcilar['Geo'] = _geoHesapla(lat, lon, _kabeLat, _kabeLon);
+    setState(() {});
   }
 
   Future<void> _gpsIleKibleBul() async {
@@ -2306,7 +2364,6 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
       _gpsHata = null;
     });
     try {
-      // 1) Konum servisleri açık mı?
       final servisAcik = await Geolocator.isLocationServiceEnabled();
       if (!servisAcik) {
         setState(() {
@@ -2317,7 +2374,6 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
         return;
       }
 
-      // 2) Konum izni iste
       var izin = await Geolocator.checkPermission();
       if (izin == LocationPermission.denied) {
         izin = await Geolocator.requestPermission();
@@ -2331,33 +2387,18 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
         return;
       }
 
-      // 3) Gerçek GPS konumunu al
       final konum = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
         ),
       );
 
-      double aci;
-      try {
-        // 4) Aladhan'ın ücretsiz Kıble API'sinden yön açısını al (kendi
-        // hesaplamamızı değil, bilinen bir servisi kullanıyoruz).
-        final yanit = await http.get(Uri.parse(
-            'https://api.aladhan.com/v1/qibla/${konum.latitude}/${konum.longitude}'));
-        final veri = jsonDecode(yanit.body);
-        aci = (veri['data']['direction'] as num).toDouble();
-      } catch (_) {
-        // İnternet yoksa yerel hesaplamaya düş (yine doğru, sadece
-        // API'den doğrulanmamış).
-        aci = _bearingHesapla(
-            konum.latitude, konum.longitude, _kabeLat, _kabeLon);
-      }
+      await _tumKibleAcilariniHesapla(konum.latitude, konum.longitude);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('kible_manuel_il');
 
       setState(() {
-        _kibleAcisi = aci;
         _konumKaynagi = "gps";
         _manuelIl = null;
         _gpsDogrulukYildizi = _dogrulukYildizHesapla(konum.accuracy);
@@ -2371,29 +2412,32 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
     }
   }
 
+  int _dogrulukYildizHesapla(double metreDogruluk) {
+    if (metreDogruluk <= 10) return 5;
+    if (metreDogruluk <= 25) return 4;
+    if (metreDogruluk <= 50) return 3;
+    if (metreDogruluk <= 100) return 2;
+    return 1;
+  }
+
   void _kibleAcisiniGuncelle(String il) {
     final koordinat = _ilKoordinat[il];
     if (koordinat == null) return;
-    setState(() {
-      _kibleAcisi =
-          _bearingHesapla(koordinat[0], koordinat[1], _kabeLat, _kabeLon);
-    });
+    _tumKibleAcilariniHesapla(koordinat[0], koordinat[1]);
   }
 
   Future<void> _konumBilgisiniYukle() async {
     final prefs = await SharedPreferences.getInstance();
-    final kayitli = prefs.getString('secilen_sehir') ?? "Mus";
+    final kayitli = prefs.getString('secilen_sehir') ?? "Muş";
     final manuel = prefs.getString('kible_manuel_il');
     setState(() {
-      _kayitliSehir = _ilKoordinat.containsKey(kayitli) ? kayitli : "Mus";
+      _kayitliSehir = _ilKoordinat.containsKey(kayitli) ? kayitli : "Muş";
       _manuelIl =
           (manuel != null && _ilKoordinat.containsKey(manuel)) ? manuel : null;
     });
     _kibleAcisiniGuncelle(_manuelIl ?? _kayitliSehir);
   }
 
-  // "Mevcut konumumu kullan": uygulamanın Vakitler sayfasında seçili olan
-  // kayıtlı şehre döner (manuel/GPS geçersiz kılmayı sıfırlar/nulldurur).
   Future<void> _kayitliKonumuKullan() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('kible_manuel_il');
@@ -2467,8 +2511,33 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
     }
   }
 
+  void _kaynakDegistir(String kaynakId) {
+    setState(() {
+      _seciliKaynak = kaynakId;
+    });
+  }
+
+  Widget _yildizGoster(int sayi) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (i) {
+        return Icon(
+          i < sayi ? Icons.star : Icons.star_border,
+          size: 14,
+          color: const Color(0xFFB5627A),
+        );
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final secilenKaynak = _kibleKaynaklari.firstWhere(
+      (k) => k['id'] == _seciliKaynak,
+      orElse: () => _kibleKaynaklari[0],
+    );
+    final gosterilecekAci = _kibleAcilar[_seciliKaynak] ?? 0.0;
+
     return Scaffold(
       body: FlowerBackground(
         isDark: widget.isDark,
@@ -2488,7 +2557,7 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                     ),
                     const Spacer(),
                     Text(
-                      "🕋 Kible Pusulasi",
+                      "🕋 Kıble Pusulası",
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -2510,11 +2579,13 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                             backgroundColor: widget.isDark
                                 ? const Color(0xFF2D1B2E)
                                 : Colors.white,
-                            title: const Text("🕋 Kible Pusulasi"),
+                            title: const Text("🕋 Kıble Pusulası"),
                             content: const Text(
-                              "Telefonu düz tutun ve etrafinda dönün.\n"
-                              "🌷 Pembe ok Kible yönünü gösterir.\n"
-                              "📍 Kirmizi ok Kuzey yönünü gösterir.",
+                              "📱 Telefonu düz tutun ve etrafında dönün.\n"
+                              "🌹 Pembe ok Kıble yönünü gösterir.\n"
+                              "📍 Kırmızı ok Kuzey yönünü gösterir.\n\n"
+                              "🔢 3 farklı kaynaktan Kıble açısı hesaplanır.\n"
+                              "⭐ Yıldız sayısı kaynağın güvenilirliğini gösterir.",
                             ),
                             actions: [
                               TextButton(
@@ -2529,8 +2600,6 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                   ],
                 ),
               ),
-              // 🔧 YENİ: Konum kaynağı seçimi — kayıtlı şehri kullan, elle
-              // farklı bir şehir seç, ya da manuel seçimi sıfırla.
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Container(
@@ -2555,9 +2624,8 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                           Expanded(
                             child: Text(
                               _konumKaynagi == "gps"
-                                  ? "Konum: GPS (canlı)"
-                                  : "Konum: ${_manuelIl ?? _kayitliSehir}"
-                                      "${_konumKaynagi == 'manuel' ? ' (manuel)' : ' (kayıtlı)'}",
+                                  ? "📍 GPS (canlı)"
+                                  : "📍 ${_manuelIl ?? _kayitliSehir}${_konumKaynagi == 'manuel' ? ' (manuel)' : ' (kayıtlı)'}",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: widget.isDark
@@ -2568,18 +2636,7 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                             ),
                           ),
                           if (_gpsDogrulukYildizi != null)
-                            Row(
-                              children: List.generate(
-                                5,
-                                (i) => Icon(
-                                  i < _gpsDogrulukYildizi!
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  size: 14,
-                                  color: const Color(0xFFB5627A),
-                                ),
-                              ),
-                            ),
+                            _yildizGoster(_gpsDogrulukYildizi!),
                         ],
                       ),
                       if (_gpsHata != null)
@@ -2590,32 +2647,30 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                                   color: Colors.red, fontSize: 12)),
                         ),
                       const SizedBox(height: 8),
-                      // 🔧 YENİ: GPS ile gerçek konumu bul (Aladhan Kıble
-                      // API'si kullanılıyor) — birincil ve önerilen yöntem.
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _gpsYukleniyor ? null : _gpsIleKibleBul,
-                          icon: _gpsYukleniyor
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(Icons.gps_fixed, size: 18),
-                          label: Text(_gpsYukleniyor
-                              ? "Konum bulunuyor..."
-                              : "📍 Konumumu Bul (GPS)"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFB5627A),
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                       Row(
                         children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed:
+                                  _gpsYukleniyor ? null : _gpsIleKibleBul,
+                              icon: _gpsYukleniyor
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Icon(Icons.gps_fixed, size: 18),
+                              label: Text(_gpsYukleniyor
+                                  ? "Konum bulunuyor..."
+                                  : "📍 GPS ile Bul"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFB5627A),
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: _manuelIlSeciciyiGoster,
@@ -2629,70 +2684,126 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _konumKaynagi == "kayitli"
-                                  ? null
-                                  : _kayitliKonumuKullan,
-                              icon: const Icon(Icons.restart_alt, size: 18),
-                              label: const Text("Sıfırla"),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: widget.isDark
-                                    ? Colors.white70
-                                    : Colors.black54,
-                                side: BorderSide(
-                                    color: widget.isDark
-                                        ? Colors.white24
-                                        : Colors.black26),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
+                      if (_konumKaynagi != "kayitli")
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: TextButton.icon(
+                            onPressed: _kayitliKonumuKullan,
+                            icon: const Icon(Icons.restart_alt, size: 16),
+                            label: const Text("Kayıtlı konuma dön"),
+                            style: TextButton.styleFrom(
+                              foregroundColor: widget.isDark
+                                  ? Colors.white54
+                                  : Colors.black54,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 8),
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.sensor_occupied,
-                        size: 60,
-                        color: widget.isDark ? Colors.white54 : Colors.black54,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Pusula sensörü bulunamadi.\nTelefonunuz pusula destegi sunmuyor olabilir.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color:
-                              widget.isDark ? Colors.white70 : Colors.black54,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: widget.isDark
+                        ? const Color(0xFF2D1B2E).withValues(alpha: 0.6)
+                        : Colors.white.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: const Color(0xFFE8C4D0).withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: _kibleKaynaklari.map((kaynak) {
+                      final secili = _seciliKaynak == kaynak['id'];
+                      return GestureDetector(
+                        onTap: () => _kaynakDegistir(kaynak['id']),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: secili
+                                ? const Color(0xFFB5627A).withValues(alpha: 0.2)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: secili
+                                  ? const Color(0xFFB5627A)
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                kaynak['ad'],
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: secili
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: secili
+                                      ? const Color(0xFFB5627A)
+                                      : (widget.isDark
+                                          ? Colors.white54
+                                          : Colors.black54),
+                                ),
+                              ),
+                              if (secili) _yildizGoster(kaynak['yildiz']),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _pusulaVar = true;
-                          });
-                          _pusulaKontrol();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFB5627A),
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text("Yeniden Dene 🌸"),
-                      ),
-                    ],
+                      );
+                    }).toList(),
                   ),
                 ),
               ),
+              const SizedBox(height: 8),
+              if (!_pusulaVar)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.sensor_occupied,
+                          size: 60,
+                          color:
+                              widget.isDark ? Colors.white54 : Colors.black54,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Pusula sensörü bulunamadı.\nTelefonunuz pusula desteği sunmuyor olabilir.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color:
+                                widget.isDark ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _pusulaVar = true;
+                            });
+                            _pusulaKontrol();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFB5627A),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text("Yeniden Dene 🌸"),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (_pusulaVar)
                 Expanded(
                   child: StreamBuilder(
@@ -2727,10 +2838,10 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                                   ),
                                 ),
                                 Transform.rotate(
-                                  angle: -_heading * 3.14159 / 180,
+                                  angle: -_heading * math.pi / 180,
                                   child: Container(
-                                    width: 200,
-                                    height: 200,
+                                    width: 220,
+                                    height: 220,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       border: Border.all(
@@ -2743,7 +2854,7 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                                       children: [
                                         Container(
                                           width: 2,
-                                          height: 80,
+                                          height: 90,
                                           decoration: BoxDecoration(
                                             color: Colors.red,
                                             borderRadius:
@@ -2761,7 +2872,7 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                                         ),
                                         Container(
                                           width: 2,
-                                          height: 80,
+                                          height: 90,
                                           decoration: BoxDecoration(
                                             color: Colors.grey,
                                             borderRadius:
@@ -2778,10 +2889,53 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                                           ),
                                         ),
                                         Transform.rotate(
-                                          angle: _kibleAcisi * 3.14159 / 180,
+                                          angle: 90 * math.pi / 180,
                                           child: Container(
                                             width: 2,
-                                            height: 90,
+                                            height: 80,
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue,
+                                              borderRadius:
+                                                  BorderRadius.circular(2),
+                                            ),
+                                            alignment: Alignment.bottomCenter,
+                                            child: const Text(
+                                              "D",
+                                              style: TextStyle(
+                                                color: Colors.blue,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Transform.rotate(
+                                          angle: -90 * math.pi / 180,
+                                          child: Container(
+                                            width: 2,
+                                            height: 80,
+                                            decoration: BoxDecoration(
+                                              color: Colors.orange,
+                                              borderRadius:
+                                                  BorderRadius.circular(2),
+                                            ),
+                                            alignment: Alignment.bottomCenter,
+                                            child: const Text(
+                                              "B",
+                                              style: TextStyle(
+                                                color: Colors.orange,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Transform.rotate(
+                                          angle:
+                                              gosterilecekAci * math.pi / 180,
+                                          child: Container(
+                                            width: 2,
+                                            height: 100,
                                             color: const Color(0xFFB5627A),
                                             child: Column(
                                               mainAxisAlignment:
@@ -2813,22 +2967,60 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
                             Text(
-                              "Kible Acisi: ${_kibleAcisi.toStringAsFixed(1)}°",
+                              "Kıble Açısı: ${gosterilecekAci.toStringAsFixed(1)}°",
                               style: TextStyle(
-                                fontSize: 18,
+                                fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 color: widget.isDark
-                                    ? Colors.white70
+                                    ? Colors.white
                                     : const Color(0xFF4A2E3B),
                               ),
                             ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Kaynak: ${secilenKaynak['ad']} ${secilenKaynak['aciklama']}",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: widget.isDark
+                                    ? Colors.white54
+                                    : Colors.black45,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 8,
+                              children: _kibleKaynaklari
+                                  .where((k) => k['id'] != _seciliKaynak)
+                                  .map((k) {
+                                final aci = _kibleAcilar[k['id']] ?? 0.0;
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: widget.isDark
+                                        ? Colors.white10
+                                        : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    "${k['ad']}: ${aci.toStringAsFixed(1)}°",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: widget.isDark
+                                          ? Colors.white38
+                                          : Colors.black38,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
                             const SizedBox(height: 8),
                             Text(
-                              "🌸 Pembe ok Kible'yi gösterir",
+                              "🌸 Pembe ok Kıble'yi gösterir",
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 13,
                                 color: widget.isDark
                                     ? Colors.white54
                                     : Colors.black45,
@@ -2840,10 +3032,7 @@ class _KiblePusulasiState extends State<KiblePusulasi> {
                     },
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: AltBilgiMetni(isDark: widget.isDark),
-              ),
+              AltBilgiMetni(isDark: widget.isDark),
             ],
           ),
         ),
@@ -2859,8 +3048,6 @@ class AnaSayfaGezgini extends StatefulWidget {
   final bool bildirimIzniKaliciRed;
   final double yaziBoyutuOlcegi;
   final ValueChanged<double> onYaziBoyutuChanged;
-  final String yaziTipi;
-  final ValueChanged<String> onYaziTipiChanged;
 
   const AnaSayfaGezgini({
     super.key,
@@ -2869,8 +3056,6 @@ class AnaSayfaGezgini extends StatefulWidget {
     required this.bildirimIzniKaliciRed,
     required this.yaziBoyutuOlcegi,
     required this.onYaziBoyutuChanged,
-    required this.yaziTipi,
-    required this.onYaziTipiChanged,
   });
 
   @override
@@ -2879,35 +3064,35 @@ class AnaSayfaGezgini extends StatefulWidget {
 
 class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   int _aktifSayfaIndex = 0;
-  String secilenSehir = "Secilmedi";
-  String secilenIlce = "Secilmedi";
+  String secilenSehir = "Seçilmedi";
+  String secilenIlce = "Seçilmedi";
   bool isLoading = false;
   List<dynamic> aylikVeriHavuzu = [];
 
   final Map<String, List<String>> _ilIlceMap = {
     "Adana": [
-      "Aladag",
+      "Aladağ",
       "Ceyhan",
-      "Cukurova",
+      "Çukurova",
       "Feke",
-      "Imamoglu",
-      "Karaisali",
-      "Karatas",
+      "İmamoğlu",
+      "Karaisalı",
+      "Karataş",
       "Kozan",
-      "Pozanti",
+      "Pozantı",
       "Saimbeyli",
-      "Saricam",
+      "Sarıçam",
       "Seyhan",
       "Tufanbeyli",
-      "Yumurtalik",
-      "Yuregir"
+      "Yumurtalık",
+      "Yüreğir"
     ],
-    "Adiyaman": [
+    "Adıyaman": [
       "Merkez",
       "Besni",
-      "Celikhan",
+      "Çelikhan",
       "Gerger",
-      "Golbasi",
+      "Gölbaşı",
       "Kahta",
       "Samsat",
       "Sincik",
@@ -2915,67 +3100,67 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
     ],
     "Afyonkarahisar": [
       "Merkez",
-      "Basmakci",
+      "Başmakçı",
       "Bayat",
       "Bolvadin",
-      "Cay",
-      "Cobanlar",
-      "Dazkiri",
+      "Çay",
+      "Çobanlar",
+      "Dazkırı",
       "Dinar",
-      "Emirdag",
+      "Emirdağ",
       "Evciler",
       "Hocalar",
-      "Ihsaniye",
-      "Iscehisar",
-      "Kiziloren",
-      "Sandikli",
-      "Sinanpasa",
-      "Suhut",
-      "Sultandagi"
+      "İhsaniye",
+      "İscehisar",
+      "Kızılören",
+      "Sandıklı",
+      "Sinanpaşa",
+      "Şuhut",
+      "Sultandağı"
     ],
-    "Agri": [
+    "Ağrı": [
       "Merkez",
       "Diyadin",
-      "Dogubayazit",
-      "Eleskirt",
+      "Doğubayazıt",
+      "Eleşkirt",
       "Hamur",
       "Patnos",
-      "Taslicay",
+      "Taşlıçay",
       "Tutak"
     ],
     "Amasya": [
       "Merkez",
-      "Goynucek",
-      "Gumushacikoy",
-      "Hamamozu",
+      "Göynücek",
+      "Gümüşhacıköy",
+      "Hamamözü",
       "Merzifon",
       "Suluova",
-      "Tasova"
+      "Taşova"
     ],
     "Ankara": [
       "Akyurt",
-      "Altindag",
-      "Ayas",
+      "Altındağ",
+      "Ayaş",
       "Bala",
-      "Beypazari",
-      "Camlidere",
-      "Cankaya",
-      "Cubuk",
-      "Elmadag",
+      "Beypazarı",
+      "Çamlıdere",
+      "Çankaya",
+      "Çubuk",
+      "Elmadağ",
       "Etimesgut",
       "Evren",
-      "Golbasi",
-      "Gudul",
+      "Gölbaşı",
+      "Güdül",
       "Haymana",
       "Kahramankazan",
       "Kalecik",
-      "Kecioren",
-      "Kizilcahamam",
+      "Keçiören",
+      "Kızılcahamam",
       "Mamak",
-      "Nallihan",
-      "Polatli",
+      "Nallıhan",
+      "Polatlı",
       "Pursaklar",
-      "Sereflikochisar",
+      "Şereflikoçhisar",
       "Sincan",
       "Yenimahalle"
     ],
@@ -2984,90 +3169,90 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
       "Aksu",
       "Alanya",
       "Demre",
-      "Dosemealti",
-      "Elmali",
+      "Döşemealtı",
+      "Elmalı",
       "Finike",
-      "Gazipasa",
-      "Gundogmus",
-      "Ibradi",
-      "Kas",
+      "Gazipaşa",
+      "Gündoğmuş",
+      "İbradı",
+      "Kaş",
       "Kemer",
       "Kepez",
-      "Konyaalti",
+      "Konyaaltı",
       "Korkuteli",
       "Kumluca",
       "Manavgat",
-      "Muratpasa",
+      "Muratpaşa",
       "Serik"
     ],
     "Artvin": [
       "Merkez",
-      "Ardanuc",
+      "Ardanuç",
       "Arhavi",
-      "Borcka",
+      "Borçka",
       "Hopa",
-      "Kemalpasa",
+      "Kemalpaşa",
       "Murgul",
-      "Savsat",
+      "Şavşat",
       "Yusufeli"
     ],
-    "Aydin": [
-      "Bozdogan",
+    "Aydın": [
+      "Bozdoğan",
       "Buharkent",
-      "Cine",
+      "Çine",
       "Didim",
       "Efeler",
       "Germencik",
-      "Incirliova",
+      "İncirliova",
       "Karacasu",
       "Karpuzlu",
-      "Kocarli",
-      "Kosk",
-      "Kusadasi",
+      "Koçarlı",
+      "Köşk",
+      "Kuşadası",
       "Kuyucak",
       "Nazilli",
-      "Soke",
+      "Söke",
       "Sultanhisar",
       "Yenipazar"
     ],
-    "Balikesir": [
-      "Altieylul",
-      "Ayvalik",
+    "Balıkesir": [
+      "Altıeylül",
+      "Ayvalık",
       "Balya",
-      "Bandirma",
-      "Bigadic",
+      "Bandırma",
+      "Bigadiç",
       "Burhaniye",
       "Dursunbey",
       "Edremit",
       "Erdek",
-      "Gomec",
-      "Gonen",
+      "Gömeç",
+      "Gönen",
       "Havran",
-      "Ivrindi",
+      "İvrindi",
       "Karesi",
       "Kepsut",
       "Manyas",
       "Marmara",
-      "Savastepe",
-      "Sindirgi",
+      "Savaştepe",
+      "Sındırgı",
       "Susurluk"
     ],
     "Bilecik": [
       "Merkez",
-      "Bozuyuk",
-      "Golpazari",
-      "Inhisar",
+      "Bozüyük",
+      "Gölpazarı",
+      "İnhisar",
       "Osmaneli",
       "Pazaryeri",
-      "Sogut",
+      "Söğüt",
       "Yenipazar"
     ],
-    "Bingol": [
+    "Bingöl": [
       "Merkez",
-      "Adakli",
-      "Genc",
-      "Karliova",
-      "Kigi",
+      "Adaklı",
+      "Genç",
+      "Karlıova",
+      "Kiğı",
       "Solhan",
       "Yayladere",
       "Yedisu"
@@ -3076,649 +3261,649 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
       "Merkez",
       "Adilcevaz",
       "Ahlat",
-      "Guroymak",
+      "Güroymak",
       "Hizan",
       "Mutki",
       "Tatvan"
     ],
     "Bolu": [
       "Merkez",
-      "Dortdivan",
+      "Dörtdivan",
       "Gerede",
-      "Goynuk",
-      "Kibriscik",
+      "Göynük",
+      "Kıbrıscık",
       "Mengen",
       "Mudurnu",
       "Seben",
-      "Yenicaga"
+      "Yeniçağa"
     ],
     "Burdur": [
       "Merkez",
-      "Aglasun",
-      "Altinyayla",
+      "Ağlasun",
+      "Altınyayla",
       "Bucak",
-      "Cavdir",
-      "Celtikci",
-      "Golhisar",
-      "Karamanli",
+      "Çavdır",
+      "Çeltikçi",
+      "Gölhisar",
+      "Karamanlı",
       "Kemer",
       "Tefenni",
-      "Yesilova"
+      "Yeşilova"
     ],
     "Bursa": [
-      "Buyukorhan",
+      "Büyükorhan",
       "Gemlik",
-      "Gursu",
-      "Harmancik",
-      "Inegol",
-      "Iznik",
+      "Gürsu",
+      "Harmancık",
+      "İnegöl",
+      "İznik",
       "Karacabey",
       "Keles",
       "Kestel",
       "Mudanya",
-      "Mustafakemalpasa",
-      "Nilufer",
+      "Mustafakemalpaşa",
+      "Nilüfer",
       "Orhaneli",
       "Orhangazi",
       "Osmangazi",
-      "Yenisehir",
-      "Yildirim"
+      "Yenişehir",
+      "Yıldırım"
     ],
-    "Canakkale": [
+    "Çanakkale": [
       "Merkez",
-      "Ayvacik",
-      "Bayramic",
+      "Ayvacık",
+      "Bayramiç",
       "Biga",
       "Bozcaada",
-      "Can",
+      "Çan",
       "Eceabat",
       "Ezine",
       "Gelibolu",
-      "Gokceada",
+      "Gökçeada",
       "Lapseki",
       "Yenice"
     ],
-    "Cankiri": [
+    "Çankırı": [
       "Merkez",
       "Atkaracalar",
-      "Bayramoren",
-      "Cerkes",
+      "Bayramören",
+      "Çerkeş",
       "Eldivan",
       "Ilgaz",
-      "Kizilirmak",
+      "Kızılırmak",
       "Korgun",
-      "Kursunlu",
+      "Kurşunlu",
       "Orta",
-      "Sabanozu",
-      "Yaprakli"
+      "Şabanözü",
+      "Yapraklı"
     ],
-    "Corum": [
+    "Çorum": [
       "Merkez",
       "Alaca",
       "Bayat",
-      "Bogazkale",
+      "Boğazkale",
       "Dodurga",
-      "Iskilip",
-      "Kargi",
-      "Lacin",
-      "Mecitozu",
-      "Oguzlar",
-      "Ortakoy",
-      "Osmancik",
+      "İskilip",
+      "Kargı",
+      "Laçin",
+      "Mecitözü",
+      "Oğuzlar",
+      "Ortaköy",
+      "Osmancık",
       "Sungurlu",
-      "Ugurludag"
+      "Uğurludağ"
     ],
     "Denizli": [
-      "Acipayam",
+      "Acıpayam",
       "Babadag",
       "Baklan",
       "Bekilli",
-      "Beyagac",
+      "Beyağaç",
       "Bozkurt",
       "Buldan",
-      "Cal",
-      "Cameli",
-      "Cardak",
-      "Civril",
-      "Guney",
+      "Çal",
+      "Çameli",
+      "Çardak",
+      "Çivril",
+      "Güney",
       "Honaz",
       "Kale",
       "Merkezefendi",
       "Pamukkale",
-      "Saraykoy",
+      "Sarayköy",
       "Serinhisar",
       "Tavas"
     ],
-    "Diyarbakir": [
-      "Baglar",
+    "Diyarbakır": [
+      "Bağlar",
       "Bismil",
-      "Cermik",
-      "Cinar",
-      "Cungus",
+      "Çermik",
+      "Çınar",
+      "Çüngüş",
       "Dicle",
-      "Egil",
+      "Eğil",
       "Ergani",
       "Hani",
       "Hazro",
-      "Kayapinar",
-      "Kocakoy",
+      "Kayapınar",
+      "Kocaköy",
       "Kulp",
       "Lice",
       "Silvan",
       "Sur",
-      "Yenisehir"
+      "Yenişehir"
     ],
     "Edirne": [
       "Merkez",
       "Enez",
       "Havsa",
-      "Ipsala",
-      "Kesan",
-      "Lalapasa",
-      "Meric",
-      "Suloglu",
-      "Uzunkopru"
+      "İpsala",
+      "Keşan",
+      "Lalapaşa",
+      "Meriç",
+      "Süloğlu",
+      "Uzunköprü"
     ],
-    "Elazig": [
+    "Elazığ": [
       "Merkez",
-      "Agin",
+      "Ağın",
       "Alacakaya",
-      "Aricak",
+      "Arıcak",
       "Baskil",
       "Karakocan",
       "Keban",
-      "Kovancilar",
+      "Kovancılar",
       "Maden",
       "Palu",
       "Sivrice"
     ],
     "Erzincan": [
       "Merkez",
-      "Cayirli",
-      "Ilic",
+      "Çayırlı",
+      "İliç",
       "Kemah",
       "Kemaliye",
       "Otlukbeli",
       "Refahiye",
       "Tercan",
-      "Uzumlu"
+      "Üzümlü"
     ],
     "Erzurum": [
-      "Askale",
+      "Aşkale",
       "Aziziye",
-      "Cat",
-      "Hinis",
+      "Çat",
+      "Hınıs",
       "Horasan",
-      "Ispir",
-      "Karacoban",
-      "Karayazi",
-      "Koprukoy",
+      "İspir",
+      "Karaçoban",
+      "Karayazı",
+      "Köprüköy",
       "Narman",
       "Oltu",
       "Olur",
-      "Palandoken",
+      "Palandöken",
       "Pasinler",
       "Pazaryolu",
-      "Senkaya",
+      "Şenkaya",
       "Tekman",
       "Tortum",
       "Uzundere",
       "Yakutiye"
     ],
-    "Eskisehir": [
+    "Eskişehir": [
       "Alpu",
       "Beylikova",
-      "Cifteler",
-      "Gunyuzu",
+      "Çifteler",
+      "Günyüzü",
       "Han",
-      "Inonu",
+      "İnönü",
       "Mahmudiye",
       "Mihalgazi",
-      "Mihaliccik",
-      "Odunpazari",
-      "Saricakaya",
+      "Mihalıççık",
+      "Odunpazarı",
+      "Sarıcakaya",
       "Seyitgazi",
       "Sivrihisar",
-      "Tepebasi"
+      "Tepebaşı"
     ],
     "Gaziantep": [
       "Araban",
-      "Islahiye",
-      "Karkamis",
+      "İslahiye",
+      "Karkamış",
       "Nizip",
-      "Nurdagi",
-      "Oguzeli",
-      "Sahinbey",
-      "Sehitkamil",
+      "Nurdağı",
+      "Oğuzeli",
+      "Şahinbey",
+      "Şehitkamil",
       "Yavuzeli"
     ],
     "Giresun": [
       "Merkez",
       "Alucra",
       "Bulancak",
-      "Camoluk",
-      "Canakci",
+      "Çamoluk",
+      "Çanakçı",
       "Dereli",
-      "Dogankent",
+      "Doğankent",
       "Espiye",
       "Eynesil",
-      "Gorele",
-      "Guce",
-      "Kesap",
+      "Görele",
+      "Güce",
+      "Keşap",
       "Piraziz",
-      "Sebinkarahisar",
+      "Şebinkarahisar",
       "Tirebolu",
-      "Yaglidere"
+      "Yağlıdere"
     ],
-    "Gumushane": ["Merkez", "Kelkit", "Kose", "Kurtun", "Siran", "Torul"],
-    "Hakkari": ["Merkez", "Cukurca", "Derecik", "Semdinli", "Yuksekova"],
+    "Gümüşhane": ["Merkez", "Kelkit", "Köse", "Kürtün", "Şiran", "Torul"],
+    "Hakkari": ["Merkez", "Çukurca", "Derecik", "Şemdinli", "Yüksekova"],
     "Hatay": [
-      "Altinozu",
+      "Altınözü",
       "Antakya",
       "Arsuz",
       "Belen",
       "Defne",
-      "Dortyol",
+      "Dörtyol",
       "Erzin",
       "Hassa",
-      "Iskenderun",
-      "Kirikhan",
+      "İskenderun",
+      "Kırıkhan",
       "Kumlu",
       "Payas",
-      "Reyhanli",
-      "Samandag",
-      "Yayladagi"
+      "Reyhanlı",
+      "Samandağ",
+      "Yayladağı"
     ],
     "Isparta": [
       "Merkez",
       "Aksu",
       "Atabey",
-      "Egirdir",
+      "Eğirdir",
       "Gelendost",
-      "Gonen",
-      "Keciborlu",
-      "Sarkikaraagac",
+      "Gönen",
+      "Keçiborlu",
+      "Şarkikaraağaç",
       "Senirkent",
-      "Sutculer",
+      "Sütçüler",
       "Uluborlu",
-      "Yalvac",
-      "Yenisarbademli"
+      "Yalvaç",
+      "Yenişarbademli"
     ],
     "Mersin": [
       "Akdeniz",
       "Anamur",
-      "Aydincik",
-      "Bozyazi",
-      "Camliyayla",
+      "Aydıncık",
+      "Bozyazı",
+      "Çamlıyayla",
       "Erdemli",
-      "Gulnar",
+      "Gülnar",
       "Mezitli",
       "Mut",
       "Silifke",
       "Tarsus",
       "Toroslar",
-      "Yenisehir"
+      "Yenişehir"
     ],
-    "Istanbul": [
+    "İstanbul": [
       "Adalar",
-      "Arnavutkoy",
-      "Atasehir",
-      "Avcilar",
-      "Bagcilar",
-      "Bahcelievler",
-      "Bakirkoy",
-      "Basaksehir",
-      "Bayrampasa",
-      "Besiktas",
+      "Arnavutköy",
+      "Ataşehir",
+      "Avcılar",
+      "Bağcılar",
+      "Bahçelievler",
+      "Bakırköy",
+      "Başakşehir",
+      "Bayrampaşa",
+      "Beşiktaş",
       "Beykoz",
-      "Beylikduzu",
-      "Beyoglu",
-      "Buyukcekmece",
-      "Catalca",
-      "Cekmekoy",
+      "Beylikdüzü",
+      "Beyoğlu",
+      "Büyükçekmece",
+      "Çatalca",
+      "Çekmeköy",
       "Esenler",
       "Esenyurt",
-      "Eyupsultan",
+      "Eyüpsultan",
       "Fatih",
-      "Gaziosmanpasa",
-      "Gungoren",
-      "Kadikoy",
-      "Kagithane",
+      "Gaziosmanpaşa",
+      "Güngören",
+      "Kadıköy",
+      "Kağıthane",
       "Kartal",
-      "Kucukcekmece",
+      "Küçükçekmece",
       "Maltepe",
       "Pendik",
       "Sancaktepe",
-      "Sariyer",
-      "Sile",
+      "Sarıyer",
+      "Şile",
       "Silivri",
-      "Sisli",
+      "Şişli",
       "Sultanbeyli",
       "Sultangazi",
       "Tuzla",
-      "Umraniye",
-      "Uskudar",
+      "Ümraniye",
+      "Üsküdar",
       "Zeytinburnu"
     ],
-    "Izmir": [
-      "Aliaga",
-      "Balcova",
-      "Bayindir",
-      "Bayrakli",
+    "İzmir": [
+      "Aliağa",
+      "Balçova",
+      "Bayındır",
+      "Bayraklı",
       "Bergama",
-      "Beydag",
+      "Beydağ",
       "Bornova",
       "Buca",
-      "Cesme",
-      "Cigli",
+      "Çeşme",
+      "Çiğli",
       "Dikili",
-      "Foca",
+      "Foça",
       "Gaziemir",
-      "Guzelbahce",
+      "Güzelbahçe",
       "Karabaglar",
       "Karaburun",
-      "Karsiyaka",
-      "Kemalpasa",
-      "Kinik",
+      "Karşıyaka",
+      "Kemalpaşa",
+      "Kınık",
       "Kiraz",
       "Konak",
       "Menderes",
       "Menemen",
-      "Narlidere",
-      "Odemis",
+      "Narlıdere",
+      "Ödemiş",
       "Seferihisar",
-      "Selcuk",
+      "Selçuk",
       "Tire",
-      "Torbali",
+      "Torbalı",
       "Urla"
     ],
     "Kars": [
       "Merkez",
       "Akyaka",
-      "Arpacay",
+      "Arpaçay",
       "Digor",
-      "Kagizman",
-      "Sarikamis",
+      "Kağızman",
+      "Sarıkamış",
       "Selim",
       "Susuz"
     ],
     "Kastamonu": [
       "Merkez",
       "Abana",
-      "Agli",
-      "Arac",
+      "Ağlı",
+      "Araç",
       "Azdavay",
       "Bozkurt",
-      "Catalzeytin",
+      "Çatalzeytin",
       "Cide",
       "Daday",
       "Devrekani",
-      "Doganyurt",
-      "Hanonu",
-      "Ihsangazi",
-      "Inebolu",
-      "Kure",
-      "Pinarbasi",
-      "Senpazar",
+      "Doğanyurt",
+      "Hanönü",
+      "İhsangazi",
+      "İnebolu",
+      "Küre",
+      "Pınarbaşı",
+      "Şenpazar",
       "Seydiler",
-      "Taskopru",
+      "Taşköprü",
       "Tosya"
     ],
     "Kayseri": [
-      "Akkisla",
-      "Bunyan",
+      "Akkışla",
+      "Bünyan",
       "Develi",
       "Felahiye",
-      "Hacilar",
-      "Incesu",
+      "Hacılar",
+      "İncesu",
       "Kocasinan",
       "Melikgazi",
-      "Ozvatan",
-      "Pinarbasi",
-      "Sarioglan",
-      "Sariz",
+      "Özvatan",
+      "Pınarbaşı",
+      "Sarıoğlan",
+      "Sarız",
       "Talas",
       "Tomarza",
-      "Yahyali",
-      "Yesilhisar"
+      "Yahyalı",
+      "Yeşilhisar"
     ],
-    "Kirklareli": [
+    "Kırklareli": [
       "Merkez",
       "Babaeski",
-      "Demirkoy",
-      "Kofcaz",
-      "Luleburgaz",
-      "Pehlivankoy",
-      "Pinarhisar",
+      "Demirköy",
+      "Kofçaz",
+      "Lüleburgaz",
+      "Pehlivanköy",
+      "Pınarhisar",
       "Vize"
     ],
-    "Kirsehir": [
+    "Kırşehir": [
       "Merkez",
-      "Akcakent",
-      "Akpinar",
+      "Akçakent",
+      "Akpınar",
       "Boztepe",
-      "Cicekdagi",
+      "Çiçekdağı",
       "Kaman",
       "Mucur"
     ],
     "Kocaeli": [
-      "Basiskele",
-      "Cayirova",
-      "Darica",
+      "Başiskele",
+      "Çayırova",
+      "Darıca",
       "Derince",
-      "Dilovasi",
+      "Dilovası",
       "Gebze",
-      "Golcuk",
-      "Izmit",
-      "Kandira",
-      "Karamursel",
+      "Gölcük",
+      "İzmit",
+      "Kandıra",
+      "Karamürsel",
       "Kartepe",
-      "Korfez"
+      "Körfez"
     ],
     "Konya": [
-      "Ahirli",
-      "Akoren",
-      "Aksehir",
-      "Altinekin",
-      "Beysehir",
-      "Bozkir",
-      "Celtik",
+      "Ahırlı",
+      "Akören",
+      "Akşehir",
+      "Altınekin",
+      "Beyşehir",
+      "Bozkır",
+      "Çeltik",
       "Cihanbeyli",
-      "Cumra",
+      "Çumra",
       "Derbent",
       "Derebucak",
-      "Doganhisar",
+      "Doğanhisar",
       "Emirgazi",
-      "Eregli",
-      "Guneysinir",
+      "Ereğli",
+      "Güneysınır",
       "Hadim",
-      "Halkapinar",
-      "Huyuk",
-      "Ilgin",
-      "Kadinhani",
-      "Karapinar",
+      "Halkapınar",
+      "Hüyük",
+      "Ilgın",
+      "Kadınhanı",
+      "Karapınar",
       "Karatay",
       "Kulu",
       "Meram",
-      "Sarayonu",
-      "Selcuklu",
-      "Seydisehir",
-      "Taskent",
-      "Tuzlukcu",
-      "Yalihuyuk",
+      "Sarayönü",
+      "Selçuklu",
+      "Seydişehir",
+      "Taşkent",
+      "Tuzlukçu",
+      "Yalıhüyük",
       "Yunak"
     ],
-    "Kutahya": [
+    "Kütahya": [
       "Merkez",
-      "Altintas",
+      "Altıntaş",
       "Aslanapa",
-      "Cavdarhisar",
-      "Domanic",
-      "Dumlupinar",
+      "Çavdarhisar",
+      "Domaniç",
+      "Dumlupınar",
       "Emet",
       "Gediz",
-      "Hisarcik",
+      "Hisarcık",
       "Pazarlar",
-      "Saphane",
+      "Şaphane",
       "Simav",
-      "Tavsanli"
+      "Tavşanlı"
     ],
     "Malatya": [
-      "Akcadag",
+      "Akçadağ",
       "Arapgir",
       "Arguvan",
       "Battalgazi",
       "Darende",
-      "Dogansehir",
-      "Doganyol",
+      "Doğanşehir",
+      "Doğanyol",
       "Hekimhan",
       "Kale",
       "Kuluncak",
-      "Puturge",
-      "Yazihan",
-      "Yesilyurt"
+      "Pütürge",
+      "Yazıhan",
+      "Yeşilyurt"
     ],
     "Manisa": [
       "Ahmetli",
       "Akhisar",
-      "Alasehir",
+      "Alaşehir",
       "Demirci",
-      "Golmarmara",
-      "Gordes",
-      "Kirkagac",
-      "Koprubasi",
+      "Gölmarmara",
+      "Gördes",
+      "Kırkağaç",
+      "Köprübaşı",
       "Kula",
       "Salihli",
-      "Sarigol",
-      "Saruhanli",
-      "Sehzadeler",
+      "Sarıgöl",
+      "Saruhanlı",
+      "Şehzadeler",
       "Selendi",
       "Soma",
       "Turgutlu",
       "Yunusemre"
     ],
-    "Kahramanmaras": [
-      "Afsin",
-      "Andirin",
-      "Caglayancerit",
-      "Dulkadiroglu",
-      "Ekinozu",
+    "Kahramanmaraş": [
+      "Afşin",
+      "Andırın",
+      "Çağlayancerit",
+      "Dulkadiroğlu",
+      "Ekinözü",
       "Elbistan",
-      "Goksun",
+      "Göksun",
       "Nurhak",
-      "Onikisubat",
-      "Pazarcik",
-      "Turkoglu"
+      "Onikişubat",
+      "Pazarcık",
+      "Türkoğlu"
     ],
     "Mardin": [
       "Artuklu",
-      "Dargecit",
+      "Dargeçit",
       "Derik",
-      "Kiziltepe",
-      "Mazidagi",
+      "Kızıltepe",
+      "Mazıdağı",
       "Midyat",
       "Nusaybin",
-      "Omerli",
+      "Ömerli",
       "Savur",
-      "Yesilli"
+      "Yeşilli"
     ],
-    "Mugla": [
+    "Muğla": [
       "Bodrum",
       "Dalaman",
-      "Datca",
+      "Datça",
       "Fethiye",
-      "Kavaklidere",
-      "Koycegiz",
+      "Kavaklıdere",
+      "Köyceğiz",
       "Marmaris",
-      "Mentese",
+      "Menteşe",
       "Milas",
       "Ortaca",
       "Seydikemer",
       "Ula",
-      "Yatagan"
+      "Yatağan"
     ],
-    "Mus": ["Merkez", "Bulanik", "Haskoy", "Korkut", "Malazgirt", "Varto"],
-    "Nevsehir": [
+    "Muş": ["Merkez", "Bulanık", "Hasköy", "Korkut", "Malazgirt", "Varto"],
+    "Nevşehir": [
       "Merkez",
-      "Acigol",
+      "Acıgöl",
       "Avanos",
       "Derinkuyu",
-      "Gulsehir",
-      "Hacibektas",
-      "Kozakli",
-      "Urgup"
+      "Gülşehir",
+      "Hacıbektaş",
+      "Kozaklı",
+      "Ürgüp"
     ],
-    "Nigde": ["Merkez", "Altunhisar", "Bor", "Camardi", "Ciftlik", "Ulukisla"],
+    "Niğde": ["Merkez", "Altunhisar", "Bor", "Çamardı", "Çiftlik", "Ulukışla"],
     "Ordu": [
-      "Akkus",
-      "Altinordu",
-      "Aybasti",
-      "Camas",
-      "Catalpinar",
-      "Caybasi",
+      "Akkuş",
+      "Altınordu",
+      "Aybastı",
+      "Çamaş",
+      "Çatalpınar",
+      "Çaybaşı",
       "Fatsa",
-      "Golkoy",
-      "Gulyali",
-      "Gurgentepe",
-      "Ikizce",
-      "Kabaduz",
-      "Kabatas",
+      "Gölköy",
+      "Gülyalı",
+      "Gürgentepe",
+      "İkizce",
+      "Kabadüz",
+      "Kabataş",
       "Korgan",
       "Kumru",
       "Mesudiye",
-      "Persembe",
+      "Perşembe",
       "Ulubey",
-      "Unye"
+      "Ünye"
     ],
     "Rize": [
       "Merkez",
-      "Ardesen",
-      "Camlihemsin",
-      "Cayeli",
-      "Derepazari",
-      "Findikli",
-      "Guneysu",
-      "Hemsin",
-      "Ikizdere",
-      "Iyidere",
+      "Ardeşen",
+      "Çamlıhemşin",
+      "Çayeli",
+      "Derepazarı",
+      "Fındıklı",
+      "Güneysu",
+      "Hemşin",
+      "İkizdere",
+      "İyidere",
       "Kalkandere",
       "Pazar"
     ],
     "Sakarya": [
-      "Adapazari",
-      "Akyazi",
+      "Adapazarı",
+      "Akyazı",
       "Arifiye",
       "Erenler",
       "Ferizli",
       "Geyve",
       "Hendek",
-      "Karapurcek",
+      "Karapürçek",
       "Karasu",
       "Kaynarca",
       "Kocaali",
       "Pamukova",
       "Sapanca",
       "Serdivan",
-      "Sogutlu",
-      "Tarakli"
+      "Söğütlü",
+      "Taraklı"
     ],
     "Samsun": [
-      "19 Mayis",
-      "Alacam",
-      "Asarcik",
+      "19 Mayıs",
+      "Alaçam",
+      "Asarcık",
       "Atakum",
-      "Ayvacik",
+      "Ayvacık",
       "Bafra",
       "Canik",
-      "Carsamba",
+      "Çarşamba",
       "Havza",
-      "Ilkadim",
+      "İlkadım",
       "Kavak",
       "Ladik",
-      "Salipazari",
-      "Tekkekoy",
+      "Salıpazarı",
+      "Tekkeköy",
       "Terme",
-      "Vezirkopru",
+      "Vezirköprü",
       "Yakakent"
     ],
     "Siirt": [
@@ -3727,231 +3912,231 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
       "Eruh",
       "Kurtalan",
       "Pervari",
-      "Sirvan",
+      "Şirvan",
       "Tillo"
     ],
     "Sinop": [
       "Merkez",
-      "Ayancik",
+      "Ayancık",
       "Boyabat",
       "Dikmen",
-      "Duragan",
+      "Durağan",
       "Erfelek",
       "Gerze",
-      "Sarayduzu",
-      "Turkeli"
+      "Saraydüzü",
+      "Türkeli"
     ],
     "Sivas": [
       "Merkez",
-      "Akincilar",
-      "Altinyayla",
-      "Divrigi",
-      "Dogansar",
+      "Akıncılar",
+      "Altınyayla",
+      "Divriği",
+      "Doğanşar",
       "Gemerek",
-      "Golova",
-      "Gurun",
+      "Gölova",
+      "Gürün",
       "Hafik",
-      "Imranli",
+      "İmranlı",
       "Kangal",
       "Koyulhisar",
-      "Sarkisla",
-      "Susehri",
-      "Ulas",
-      "Yildizeli",
+      "Şarkışla",
+      "Suşehri",
+      "Ulaş",
+      "Yıldızeli",
       "Zara"
     ],
-    "Tekirdag": [
-      "Cerkezkoy",
-      "Corlu",
+    "Tekirdağ": [
+      "Çerkezköy",
+      "Çorlu",
       "Ergene",
       "Hayrabolu",
-      "Kapakli",
+      "Kapaklı",
       "Malkara",
-      "Marmaraereglisi",
-      "Muratli",
+      "Marmaraereğlisi",
+      "Muratlı",
       "Saray",
-      "Sarkoy",
-      "Suleymanpasa"
+      "Şarköy",
+      "Süleymanpaşa"
     ],
     "Tokat": [
       "Merkez",
       "Almus",
       "Artova",
-      "Basciftlik",
+      "Başçiftlik",
       "Erbaa",
       "Niksar",
       "Pazar",
-      "Resadiye",
+      "Reşadiye",
       "Sulusaray",
       "Turhal",
-      "Yesilyurt",
+      "Yeşilyurt",
       "Zile"
     ],
     "Trabzon": [
-      "Akcaabat",
-      "Arakli",
+      "Akçaabat",
+      "Araklı",
       "Arsin",
-      "Besikduzu",
-      "Carsibasi",
-      "Caykara",
-      "Dernekpazari",
-      "Duzkoy",
+      "Beşikdüzü",
+      "Çarşıbaşı",
+      "Çaykara",
+      "Dernekpazarı",
+      "Düzköy",
       "Hayrat",
-      "Koprubasi",
-      "Macka",
+      "Köprübaşı",
+      "Maçka",
       "Of",
       "Ortahisar",
-      "Salpazari",
-      "Surmene",
+      "Salpazarı",
+      "Sürmene",
       "Tonya",
-      "Vakfikebir",
+      "Vakfıkebir",
       "Yomra"
     ],
     "Tunceli": [
       "Merkez",
-      "Cemisgezek",
+      "Çemişgezek",
       "Hozat",
       "Mazgirt",
       "Nazimiye",
-      "Ovacik",
+      "Ovacık",
       "Pertek",
-      "Pulumur"
+      "Pülümür"
     ],
-    "Sanliurfa": [
-      "Akcakale",
+    "Şanlıurfa": [
+      "Akçakale",
       "Birecik",
       "Bozova",
-      "Ceylanpinar",
-      "Eyyubiye",
+      "Ceylanpınar",
+      "Eyyübiye",
       "Halfeti",
       "Haliliye",
       "Harran",
       "Hilvan",
-      "Karakopru",
+      "Karaköprü",
       "Siverek",
-      "Suruc",
-      "Viransehir"
+      "Suruç",
+      "Viranşehir"
     ],
-    "Usak": ["Merkez", "Banaz", "Esme", "Karahalli", "Sivasli", "Ulubey"],
+    "Uşak": ["Merkez", "Banaz", "Eşme", "Karahallı", "Sivaslı", "Ulubey"],
     "Van": [
-      "Bahcesaray",
-      "Baskale",
-      "Caldiran",
-      "Catak",
+      "Bahçesaray",
+      "Başkale",
+      "Çaldıran",
+      "Çatak",
       "Edremit",
-      "Ercis",
-      "Gevas",
-      "Gurpinar",
-      "Ipekyolu",
+      "Erciş",
+      "Gevaş",
+      "Gürpınar",
+      "İpekyolu",
       "Muradiye",
-      "Ozalp",
+      "Özalp",
       "Saray",
-      "Tusba"
+      "Tuşba"
     ],
     "Yozgat": [
       "Merkez",
-      "Akdagmadeni",
-      "Aydincik",
-      "Bogazliyan",
-      "Candir",
-      "Cayiralan",
-      "Cekerek",
-      "Kadisehri",
+      "Akdağmadeni",
+      "Aydıncık",
+      "Boğazlıyan",
+      "Çandır",
+      "Çayıralan",
+      "Çekerek",
+      "Kadışehri",
       "Saraykent",
-      "Sarikaya",
+      "Sarıkaya",
       "Sefaatli",
       "Sorgun",
-      "Yenifakili",
-      "Yerkoy"
+      "Yenifakılı",
+      "Yerköy"
     ],
     "Zonguldak": [
       "Merkez",
-      "Alapli",
-      "Caycuma",
+      "Alaplı",
+      "Çaycuma",
       "Devrek",
-      "Eregli",
-      "Gokcebey",
+      "Ereğli",
+      "Gökçebey",
       "Kilimli",
       "Kozlu"
     ],
     "Aksaray": [
       "Merkez",
-      "Agacoren",
+      "Ağaçören",
       "Eskil",
-      "Gulagac",
-      "Guzelyurt",
-      "Ortakoy",
-      "Sariyahsi",
-      "Sultanhani"
+      "Gülağaç",
+      "Güzelyurt",
+      "Ortaköy",
+      "Sarıyahşi",
+      "Sultanhanı"
     ],
-    "Bayburt": ["Merkez", "Aydintepe", "Demirozu"],
+    "Bayburt": ["Merkez", "Aydıntepe", "Demirözü"],
     "Karaman": [
       "Merkez",
-      "Ayranci",
-      "Basyayla",
+      "Ayrancı",
+      "Başyayla",
       "Ermenek",
-      "Kazimkarabekir",
+      "Kazımkarabekir",
       "Sariveliler"
     ],
-    "Kirikkale": [
+    "Kırıkkale": [
       "Merkez",
-      "Bahsili",
-      "Baliseyh",
-      "Celebi",
+      "Bahşılı",
+      "Balışeyh",
+      "Çelebi",
       "Delice",
-      "Karakecili",
+      "Karakeçili",
       "Keskin",
       "Sulakyurt",
-      "Yahsihan"
+      "Yahşihan"
     ],
-    "Batman": ["Merkez", "Besiri", "Gercus", "Hasankeyf", "Kozluk", "Sason"],
-    "Sirnak": [
+    "Batman": ["Merkez", "Beşiri", "Gercüş", "Hasankeyf", "Kozluk", "Sason"],
+    "Şırnak": [
       "Merkez",
-      "Beytussebap",
+      "Beytüşşebap",
       "Cizre",
-      "Guclukonak",
-      "Idil",
+      "Güçlükonak",
+      "İdil",
       "Silopi",
       "Uludere"
     ],
-    "Bartin": ["Merkez", "Amasra", "Kurucasile", "Ulus"],
-    "Ardahan": ["Merkez", "Cildir", "Damal", "Gole", "Hanak", "Posof"],
-    "Igdir": ["Merkez", "Aralik", "Karakoyunlu", "Tuzluca"],
+    "Bartın": ["Merkez", "Amasra", "Kurucaşile", "Ulus"],
+    "Ardahan": ["Merkez", "Çıldır", "Damal", "Göle", "Hanak", "Posof"],
+    "Iğdır": ["Merkez", "Aralık", "Karakoyunlu", "Tuzluca"],
     "Yalova": [
       "Merkez",
-      "Altinova",
+      "Altınova",
       "Armutlu",
-      "Ciftlikkoy",
-      "Cinarcik",
+      "Çiftlikköy",
+      "Çınarcık",
       "Termal"
     ],
-    "Karabuk": [
+    "Karabük": [
       "Merkez",
       "Eflani",
       "Eskipazar",
-      "Ovacik",
+      "Ovacık",
       "Safranbolu",
       "Yenice"
     ],
     "Kilis": ["Merkez", "Elbeyli", "Musabeyli", "Polateli"],
     "Osmaniye": [
       "Merkez",
-      "Bahce",
-      "Duzici",
+      "Bahçe",
+      "Düziçi",
       "Hasanbeyli",
       "Kadirli",
       "Sumbas",
       "Toprakkale"
     ],
-    "Duzce": [
+    "Düzce": [
       "Merkez",
-      "Akcakoca",
-      "Cilimli",
+      "Akçakoca",
+      "Çilimli",
       "Cumayeri",
-      "Golyaka",
-      "Gumusova",
-      "Kaynasli",
-      "Yigilca"
+      "Gölyaka",
+      "Gümüşova",
+      "Kaynaşlı",
+      "Yığılca"
     ],
   };
 
@@ -3967,7 +4152,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   };
 
   String kalanSure = "00:00:00";
-  String siradakiVakit = "Yukleniyor...";
+  String siradakiVakit = "Yükleniyor...";
   double ilerlemeOrani = 1.0;
   Timer? _saniyeSayaci;
 
@@ -3990,56 +4175,56 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
 
   final List<String> turkiyeIlleri = [
     "Adana",
-    "Adiyaman",
+    "Adıyaman",
     "Afyonkarahisar",
-    "Agri",
+    "Ağrı",
     "Amasya",
     "Ankara",
     "Antalya",
     "Artvin",
-    "Aydin",
-    "Balikesir",
+    "Aydın",
+    "Balıkesir",
     "Bilecik",
-    "Bingol",
+    "Bingöl",
     "Bitlis",
     "Bolu",
     "Burdur",
     "Bursa",
-    "Canakkale",
-    "Cankiri",
-    "Corum",
+    "Çanakkale",
+    "Çankırı",
+    "Çorum",
     "Denizli",
-    "Diyarbakir",
+    "Diyarbakır",
     "Edirne",
-    "Elazig",
+    "Elazığ",
     "Erzincan",
     "Erzurum",
-    "Eskisehir",
+    "Eskişehir",
     "Gaziantep",
     "Giresun",
-    "Gumushane",
+    "Gümüşhane",
     "Hakkari",
     "Hatay",
     "Isparta",
     "Mersin",
-    "Istanbul",
-    "Izmir",
+    "İstanbul",
+    "İzmir",
     "Kars",
     "Kastamonu",
     "Kayseri",
-    "Kirklareli",
-    "Kirsehir",
+    "Kırklareli",
+    "Kırşehir",
     "Kocaeli",
     "Konya",
-    "Kutahya",
+    "Kütahya",
     "Malatya",
     "Manisa",
-    "Kahramanmaras",
+    "Kahramanmaraş",
     "Mardin",
-    "Mugla",
-    "Mus",
-    "Nevsehir",
-    "Nigde",
+    "Muğla",
+    "Muş",
+    "Nevşehir",
+    "Niğde",
     "Ordu",
     "Rize",
     "Sakarya",
@@ -4047,29 +4232,29 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
     "Siirt",
     "Sinop",
     "Sivas",
-    "Tekirdag",
+    "Tekirdağ",
     "Tokat",
     "Trabzon",
     "Tunceli",
-    "Sanliurfa",
-    "Usak",
+    "Şanlıurfa",
+    "Uşak",
     "Van",
     "Yozgat",
     "Zonguldak",
     "Aksaray",
     "Bayburt",
     "Karaman",
-    "Kirikkale",
+    "Kırıkkale",
     "Batman",
-    "Sirnak",
-    "Bartin",
+    "Şırnak",
+    "Bartın",
     "Ardahan",
-    "Igdir",
+    "Iğdır",
     "Yalova",
-    "Karabuk",
+    "Karabük",
     "Kilis",
     "Osmaniye",
-    "Duzce"
+    "Düzce"
   ];
 
   String? _ozelGunMesaji;
@@ -4078,7 +4263,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   void initState() {
     super.initState();
     _yukleTumAyarlar().then((_) {
-      if (secilenSehir != "Secilmedi") {
+      if (secilenSehir != "Seçilmedi") {
         ezanVakitleriniGetir();
       }
     });
@@ -4111,11 +4296,11 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
         backgroundColor:
             widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
         title: const Text(
-          "🔔 Bildirim Izni Gerekli",
+          "🔔 Bildirim İzni Gerekli",
           style: TextStyle(color: Color(0xFFB5627A)),
         ),
         content: const Text(
-          "Uygulamanin namaz vakitlerini hatirlatabilmesi icin bildirim izni gereklidir.\n\nLutfen Ayarlar > Uygulamalar > Ezan Vakti > Bildirimler yolunu izleyerek izni acin.",
+          "Uygulamanın namaz vakitlerini hatırlatabilmesi için bildirim izni gereklidir.\n\nLütfen Ayarlar > Uygulamalar > Ezan Vakti > Bildirimler yolunu izleyerek izni açın.",
         ),
         actions: [
           TextButton(
@@ -4148,7 +4333,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
         _ozelGunMesaji = bugun;
       });
       if (_bildirimCubugu) {
-        showNotification("🌸 Ozel Gun!", "$bugun kutlu olsun! 🎉", sesli: true);
+        showNotification("🌸 Özel Gün!", "$bugun kutlu olsun! 🎉", sesli: true);
       }
     }
   }
@@ -4182,7 +4367,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
               children: [
                 DropdownButtonFormField<String>(
                   decoration: InputDecoration(
-                    labelText: "Il Secin",
+                    labelText: "İl Seçin",
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16)),
                   ),
@@ -4200,7 +4385,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                 const SizedBox(height: 15),
                 DropdownButtonFormField<String>(
                   decoration: InputDecoration(
-                    labelText: "Ilce Secin",
+                    labelText: "İlçe Seçin",
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16)),
                     enabled: yerelSecilenIl != null,
@@ -4224,7 +4409,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text("Iptal",
+                child: const Text("İptal",
                     style: TextStyle(color: Color(0xFFB5627A))),
               ),
               ElevatedButton(
@@ -4260,7 +4445,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
   }
 
   Future<void> ezanVakitleriniGetir() async {
-    if (secilenSehir == "Secilmedi") return;
+    if (secilenSehir == "Seçilmedi") return;
     if (!mounted) return;
     setState(() => isLoading = true);
     try {
@@ -4280,7 +4465,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
         }
       }
     } catch (e) {
-      debugPrint("Baglanti hatasi: $e");
+      debugPrint("Bağlantı hatası: $e");
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -4373,8 +4558,8 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
         if (_sonBildirimGonderilenVakit != uyariKey) {
           _sonBildirimGonderilenVakit = uyariKey;
           showNotification(
-            "⏰ Vakit Yaklasiyor 🌸",
-            "$vakitIsmi vaktine $erkenUyariDakikasi dakika kaldi.",
+            "⏰ Vakit Yaklaşıyor 🌸",
+            "$vakitIsmi vaktine $erkenUyariDakikasi dakika kaldı.",
           );
         }
       }
@@ -4388,7 +4573,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
         bool sesli = _bildirimSesTipi != "silent";
         showNotification(
           "🕌 $vakitIsmi Vakti Geldi 🌸",
-          "$vakitIsmi ezani okunuyor.",
+          "$vakitIsmi ezanı okunuyor.",
           sesli: sesli,
         );
         if (_tamEkranUyari && mounted) {
@@ -4418,7 +4603,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
     if (_bildirimCubugu) {
       final gosterilecekSure = kalanSure == "00:00:00" ? "--:--:--" : kalanSure;
       final gosterilecekVakit =
-          siradakiVakit == "Yukleniyor..." ? "Namaz" : siradakiVakit;
+          siradakiVakit == "Yükleniyor..." ? "Namaz" : siradakiVakit;
       await updateNotification(
           gosterilecekSure, gosterilecekVakit, bugununVakitleri);
     } else {
@@ -4449,7 +4634,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
             ),
             const SizedBox(height: 12),
             const Text(
-              "Namazinizi kilmayi unutmayin.",
+              "Namazınızı kılmayı unutmayın.",
               style: TextStyle(fontSize: 18),
             ),
             const SizedBox(height: 24),
@@ -4500,8 +4685,8 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
       _bildirimSesTipi = prefs.getString('bildirim_ses_tipi') ?? "default";
       _tamEkranUyari = prefs.getBool('tam_ekran_uyari') ?? false;
       _bildirimCubugu = prefs.getBool('bildirim_cubugu') ?? false;
-      secilenSehir = prefs.getString('secilen_sehir') ?? "Secilmedi";
-      secilenIlce = prefs.getString('secilen_ilce') ?? "Secilmedi";
+      secilenSehir = prefs.getString('secilen_sehir') ?? "Seçilmedi";
+      secilenIlce = prefs.getString('secilen_ilce') ?? "Seçilmedi";
 
       String? seciliVakitlerJson = prefs.getString('secili_vakitler');
       if (seciliVakitlerJson != null) {
@@ -4542,24 +4727,13 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "🌸 Uygulama Ayarlari",
+                          "🌸 Uygulama Ayarları",
                           style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFFB5627A)),
                         ),
                         const Divider(color: Color(0xFFE8C4D0)),
-                        // 🔧 YENİ: Yazı boyutu — isteyen kullanıcı tüm
-                        // arayüzü büyük yazıyla kullanabilir, hiçbir sayfa
-                        // koda dokunulmadan MediaQuery üzerinden ölçekleniyor.
-                        // 🔧 DÜZELTME: Üst sınır 1.6'dan 1.3'e düşürüldü.
-                        // Ana Sayfa/Vakitler/Kur'an sayfalarına dokunulmadığı
-                        // için (senin isteğin üzerine) bu sayfalardaki sabit
-                        // genişlikli satırlar çok yüksek ölçeklerde taşabiliyordu
-                        // (o sarı-siyah çizgili "overflow" uyarısı SADECE debug
-                        // modda görünür, gerçek/yayınlanan APK'da görünmez —
-                        // ama metin yine de kırpılabilir). Daha dar bir aralık
-                        // bu riski pratikte ortadan kaldırıyor.
                         Text(
                             "🔤 Yazı Boyutu: %${(widget.yaziBoyutuOlcegi * 100).round()}",
                             style:
@@ -4579,7 +4753,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                         const Divider(color: Color(0xFFE8C4D0)),
                         SwitchListTile(
                           title: const Text(
-                              "🌷 Vaktinden once uyarilmak istiyor musun?"),
+                              "🌷 Vaktinden önce uyarılmak istiyor musun?"),
                           value: _vakitOncesiUyari,
                           onChanged: (val) {
                             setModalState(() => _vakitOncesiUyari = val);
@@ -4594,11 +4768,11 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text("Hatirlatma Suresi:",
+                                const Text("Hatırlatma Süresi:",
                                     style:
                                         TextStyle(fontWeight: FontWeight.bold)),
                                 Text(
-                                  "${_kacDakikaOnceSlider.toInt()} dakika once",
+                                  "${_kacDakikaOnceSlider.toInt()} dakika önce",
                                   style: const TextStyle(
                                       color: Color(0xFFB5627A),
                                       fontWeight: FontWeight.bold,
@@ -4623,7 +4797,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                           ),
                         ],
                         const SizedBox(height: 10),
-                        const Text("Bildirim kurulacak vakitleri secin:",
+                        const Text("Bildirim kurulacak vakitleri seçin:",
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFFB5627A))),
@@ -4647,9 +4821,9 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                         ),
                         const SizedBox(height: 10),
                         SwitchListTile(
-                          title: const Text("🦋 Tam Ekran Uyari"),
+                          title: const Text("🦋 Tam Ekran Uyarı"),
                           subtitle: const Text(
-                              "Ekran kapali/acik olsa da tam uyari metni kaplasin"),
+                              "Ekran kapalı/açık olsa da tam uyarı metni kaplasın"),
                           value: _tamEkranUyari,
                           onChanged: (val) {
                             setModalState(() => _tamEkranUyari = val);
@@ -4663,7 +4837,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.play_arrow),
-                              label: const Text("Uyanisi Test Et 🌸"),
+                              label: const Text("Uyarıyı Test Et 🌸"),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFFE8C4D0),
                                 foregroundColor: const Color(0xFF4A2E3B),
@@ -4675,9 +4849,9 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                           ),
                         const SizedBox(height: 10),
                         SwitchListTile(
-                          title: const Text("🌼 Bildirim Cubugu"),
+                          title: const Text("🌼 Bildirim Çubuğu"),
                           subtitle: const Text(
-                              "Namaz vaktine kalan sure bildirim cubugunda sabit dursun"),
+                              "Namaz vaktine kalan süre bildirim çubuğunda sabit dursun"),
                           value: _bildirimCubugu,
                           onChanged: (val) async {
                             setModalState(() => _bildirimCubugu = val);
@@ -4703,7 +4877,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                           activeThumbColor: const Color(0xFFB5627A),
                         ),
                         const SizedBox(height: 10),
-                        const Text("🏙️ Sehir / Ilce Listem",
+                        const Text("🏙️ Şehir / İlçe Listem",
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFFB5627A))),
@@ -4712,7 +4886,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                             ? const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 10),
                                 child: Text(
-                                    "Henuz hic sehir eklemediniz. Lutfen 'Yeni Ekle' butonunu kullanin. 🌷",
+                                    "Henüz hiç şehir eklemediniz. Lütfen 'Yeni Ekle' butonunu kullanın. 🌷",
                                     style: TextStyle(
                                         fontSize: 13, color: Colors.grey)),
                               )
@@ -4739,8 +4913,8 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                                           secilenIlce = son["ilce"]!;
                                           ezanVakitleriniGetir();
                                         } else {
-                                          secilenSehir = "Secilmedi";
-                                          secilenIlce = "Secilmedi";
+                                          secilenSehir = "Seçilmedi";
+                                          secilenIlce = "Seçilmedi";
                                           setState(() {
                                             bugununVakitleri = {
                                               "Imsak": "--:--",
@@ -4955,7 +5129,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
               icon: Icon(Icons.menu_book, size: 28), label: '🌺 Kuran'),
           BottomNavigationBarItem(
               icon: Icon(Icons.compass_calibration, size: 28),
-              label: '🕋 Kible'),
+              label: '🕋 Kıble'),
           BottomNavigationBarItem(
               icon: Icon(Icons.auto_awesome, size: 28), label: '🌸 Zikir'),
         ],
@@ -4992,6 +5166,17 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
     super.initState();
     bugununIcerikleri = GunlukIcerikServisi.getBugununIcerikleri();
     _gununAyetiniCanliCek();
+    _gununHadisiniCanliCek();
+    _gununDuasiniCanliCek();
+    _ozelGunleriHazirla();
+  }
+
+  Future<void> _gununDuasiniCanliCek() async {
+    final canliDua = await GunlukIcerikServisi.gununDuasiGetir();
+    if (!mounted) return;
+    setState(() {
+      bugununIcerikleri = {...bugununIcerikleri, "dua": canliDua};
+    });
   }
 
   Future<void> _gununAyetiniCanliCek() async {
@@ -5000,6 +5185,20 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
     setState(() {
       bugununIcerikleri = {...bugununIcerikleri, "ayet": canliAyet};
     });
+  }
+
+  Future<void> _gununHadisiniCanliCek() async {
+    final canliHadis = await GunlukIcerikServisi.gununHadisiGetir();
+    if (!mounted) return;
+    setState(() {
+      bugununIcerikleri = {...bugununIcerikleri, "hadis": canliHadis};
+    });
+  }
+
+  Future<void> _ozelGunleriHazirla() async {
+    await OzelGunler.diniGunleriHazirla();
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -5120,7 +5319,7 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                       Icon(Icons.calendar_today,
                           size: 18, color: Color(0xFFB5627A)),
                       const SizedBox(width: 8),
-                      Text("🌸 Yaklasan Ozel Gun",
+                      Text("🌸 Yaklaşan Özel Gün",
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -5137,7 +5336,7 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                   const SizedBox(height: 4),
                   Text(
                       yaklasanOzelGun['kalanGunText'] ??
-                          "${yaklasanOzelGun['kalanGun']} gun sonra 🌷",
+                          "${yaklasanOzelGun['kalanGun']} gün sonra 🌷",
                       style: const TextStyle(
                           color: Color(0xFFB5627A),
                           fontSize: 13,
@@ -5152,28 +5351,18 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
               ),
             ),
           _buyukKarti(
-              "🌷 Gunun Ayeti", bugununIcerikleri["ayet"]!, isDesktop, isDark),
+              "🌷 Günün Ayeti", bugununIcerikleri["ayet"]!, isDesktop, isDark),
           const SizedBox(height: 12),
-          _buyukKarti("🌺 Gunun Hadisi", bugununIcerikleri["hadis"]!, isDesktop,
+          _buyukKarti("🌺 Günün Hadisi", bugununIcerikleri["hadis"]!, isDesktop,
               isDark),
           const SizedBox(height: 12),
           _buyukKarti(
-              "🦋 Gunun Duasi", bugununIcerikleri["dua"]!, isDesktop, isDark),
+              "🦋 Günün Duası", bugununIcerikleri["dua"]!, isDesktop, isDark),
           const SizedBox(height: 12),
           _buyukKarti(
-              "🌸 Gunun Esmasi", bugununIcerikleri["esma"]!, isDesktop, isDark),
+              "🌸 Günün Esması", bugununIcerikleri["esma"]!, isDesktop, isDark),
           const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              "🌸 Bu uygulama AYSE NUR tarafindan annesi icin hazirlanmistir 🌸",
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.white38 : Colors.black45),
-              textAlign: TextAlign.center,
-            ),
-          ),
+          AltBilgiMetni(isDark: isDark),
         ],
       ),
     );
@@ -5364,17 +5553,7 @@ class VakitlerListeSayfasi extends StatelessWidget {
             },
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            "🌸 Bu uygulama AYSE NUR tarafindan annesi icin hazirlanmistir 🌸",
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white38 : Colors.black45),
-            textAlign: TextAlign.center,
-          ),
-        ),
+        AltBilgiMetni(isDark: isDark),
       ],
     );
   }

@@ -17,11 +17,9 @@ migrate_working_dir/
 *.ipr
 *.iws
 .idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+*.jks
+*.keystore
+key.properties
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -45,18 +43,4 @@ app.*.map.json
 /android/app/release
 
 build/
-.dart_tool/
-.gradle/"build/" 
-".dart_tool/" 
-".gradle/" 
-".idea/" 
-
-   // İmzalandırma ayarları buraya!
-    signingConfigs {
-        create("release") {
-            keyAlias = "upload"
-            keyPassword = "0649.44a58"
-            storeFile = file("upload-keystore.jks")
-            storePassword = "0649.44a58"
-        }
-    }
+.gradle/
