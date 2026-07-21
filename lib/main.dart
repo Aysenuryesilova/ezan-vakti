@@ -186,14 +186,9 @@ Future<void> showNotification(
   }
 }
 
-// ==================== VAKİT BİLGİ ÇUBUĞU BİLDİRİMİ ====================
-// aktifVakit: "Ogle", "Ikindi" gibi o an içinde bulunulan vakit anahtarı.
-// Bildirimde üst satırda vakit saatleri, alt satırda (----------- çizgisinin
-// altında) her vaktin süresi | ile ayrılarak gösterilir. Aktif vakit pembe
-// (#B5627A) ve kalın renkte vurgulanır.
+// ==================== VAKİT BİLGİ ÇUBUĞU BİLDİRİMİ (SADECE VAKİTLER) ====================
 Future<void> updateVakitBilgiCubugu(
   Map<String, String> vakitler,
-  String aktifVakit,
 ) async {
   if (kIsWeb) return;
 
@@ -207,79 +202,23 @@ Future<void> updateVakitBilgiCubugu(
       "Aksam": "Akşam",
       "Yatsi": "Yatsı",
     };
-    const pembeRenk = "#B5627A";
 
-    // Sadece verisi gelmiş (--:-- olmayan) vakitleri, günlük sırayla al.
-    final gecerliVakitler = sira
-        .where((v) => vakitler[v] != null && vakitler[v] != "--:--")
-        .toList();
+    List<String> vakitListesi = [];
 
-    if (gecerliVakitler.isEmpty) return;
-
-    // "HH:mm" metnini bugüne ait bir DateTime'a çevirir.
-    DateTime? zamanCoz(String vakitAdi) {
-      final saat = vakitler[vakitAdi];
-      if (saat == null || saat == "--:--") return null;
-      final parca = saat.split(":");
-      if (parca.length != 2) return null;
-      final simdi = DateTime.now();
-      final s = int.tryParse(parca[0]);
-      final d = int.tryParse(parca[1]);
-      if (s == null || d == null) return null;
-      return DateTime(simdi.year, simdi.month, simdi.day, s, d);
-    }
-
-    String vurgula(String metin, String vakitAnahtari) {
-      final aktifMi = aktifVakit.startsWith(vakitAnahtari);
-      return aktifMi ? "<font color='$pembeRenk'><b>$metin</b></font>" : metin;
-    }
-
-    // 1. SATIR: "İmsak 05:30 | Güneş 07:00 | ..." — aktif vakit pembe.
-    final ustSatirParcalari = gecerliVakitler.map((v) {
-      final metin = "${gosterimAdi[v] ?? v} ${vakitler[v]}";
-      return vurgula(metin, v);
-    }).toList();
-    final ustSatir = ustSatirParcalari.join(" | ");
-
-    // 2. SATIR: Her vaktin süresi (o vakitten bir sonraki vakte kadar olan
-    // aralık). Son vakit (Yatsı) ertesi günün ilk vaktine kadar hesaplanır.
-    final altSatirParcalari = <String>[];
-    for (int i = 0; i < gecerliVakitler.length; i++) {
-      final v = gecerliVakitler[i];
-      final baslangic = zamanCoz(v);
-      if (baslangic == null) continue;
-
-      DateTime? bitis;
-      if (i < gecerliVakitler.length - 1) {
-        bitis = zamanCoz(gecerliVakitler[i + 1]);
-      } else {
-        final ilkVakitZamani = zamanCoz(gecerliVakitler.first);
-        bitis = ilkVakitZamani?.add(const Duration(days: 1));
+    for (var v in sira) {
+      if (vakitler[v] != null && vakitler[v] != "--:--") {
+        String isim = gosterimAdi[v] ?? v;
+        String saat = vakitler[v]!;
+        vakitListesi.add("$isim $saat");
       }
-      if (bitis == null) continue;
-
-      final sure = bitis.difference(baslangic);
-      if (sure.isNegative) continue;
-
-      final saatKismi = sure.inHours;
-      final dakikaKismi = sure.inMinutes % 60;
-      final metin = "${gosterimAdi[v] ?? v} ${saatKismi}s ${dakikaKismi}dk";
-      altSatirParcalari.add(vurgula(metin, v));
     }
-    final altSatir = altSatirParcalari.join(" | ");
 
-    final icerik = "$ustSatir\n-----------\n$altSatir";
-
-    // Bildirim daraltılmışken görünen metin (HTML etiketsiz, sade).
-    final RegExp htmlEtiketi = RegExp(r"<[^>]*>");
-    final daraltilmisMetin = ustSatir.replaceAll(htmlEtiketi, "");
+    String vakitSatiri = vakitListesi.join(" | ");
 
     final bigText = BigTextStyleInformation(
-      icerik,
-      contentTitle: "🕌 Bugünün Namaz Vakitleri",
+      vakitSatiri,
+      contentTitle: "", // BAŞLIK YOK
       summaryText: "",
-      htmlFormatBigText: true,
-      htmlFormatContentTitle: true,
     );
 
     final details = NotificationDetails(
@@ -300,8 +239,8 @@ Future<void> updateVakitBilgiCubugu(
 
     await flutterLocalNotificationsPlugin.show(
       999,
-      "🕌 Bugünün Namaz Vakitleri",
-      daraltilmisMetin,
+      "", // BAŞLIK YOK - BOŞ GÖNDER
+      vakitSatiri,
       details,
     );
   } catch (e) {
@@ -3844,7 +3783,7 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
 
   void _bildirimCubuguGuncelle() async {
     if (_bildirimCubugu) {
-      await updateVakitBilgiCubugu(bugununVakitleri, siradakiVakit);
+      await updateVakitBilgiCubugu(bugununVakitleri);
     } else {
       await cancelNotification();
     }
