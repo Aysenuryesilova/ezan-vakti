@@ -1,51 +1,100 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ezan Vakti - Gizlilik Politikası</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
-        h1 { color: #2c3e50; }
-        h2 { color: #34495e; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 20px; }
-        p, li { margin-bottom: 10px; }
-    </style>
-</head>
-<body>
+import torch
+from unsloth import FastLanguageModel
+from datasets import load_dataset
+from trl import SFTTrainer
+from transformers import TrainingArguments
 
-    <h1>Ezan Vakti Uygulaması - Gizlilik Politikası</h1>
-    <p><strong>Son güncelleme:</strong> 23 Temmuz 2026</p>
+print("🚀 3. Ödev: Unsloth ile Model Fine-Tune (LoRA) Eğitimi Başlatılıyor...")
 
-    <p>Bu gizlilik politikası, <strong>Ezan Vakti</strong> (com.aysenuryesilova.ezanvakti) mobil uygulamasını ("Uygulama") kullanan kullanıcıların gizliliğini korumak amacıyla hazırlanmıştır. Uygulamamızı kullanarak, bu politikada belirtilen veri işleme uygulamalarını kabul etmiş olursunuz.</p>
+# ==========================================
+# 1. AYARLAR VE PARAMETRELER
+# ==========================================
+max_seq_length = 2048  # Modelin tek seferde okuyabileceği maksimum token uzunluğu
+dtype = None  # Otomatik algılama (Float16 veya Bfloat16)
+load_in_4bit = True  # Bellek tasarrufu için modeli 4-bit sıkıştırarak yüklüyoruz
 
-    <h2>1. Toplanan Veriler ve Kullanım Amacı</h2>
-    <p>Uygulamamız, işlevselliğini tam olarak yerine getirebilmek ve kullanıcılara doğru hizmeti sunabilmek amacıyla bazı verileri toplamakta ve işlemektedir:</p>
-    <ul>
-        <li><strong>Konum Verileri:</strong> Ezan Vakti uygulaması, bulunduğunuz coğrafi konuma (GPS ve ağ tabanlı konum) göre doğru namaz vakitlerini hesaplayabilmek amacıyla konum verilerinize erişir ve toplar. Konum verileriniz yalnızca anlık namaz vakti hesaplaması yapmak için cihaz üzerinde veya ilgili servisler aracılığıyla kullanılır.</li>
-    </ul>
+# Eğitmek için seçeceğimiz temel model (Unsloth optimize edilmiş Llama modeli)
+model_name = "unsloth/Llama-3-8B-Instruct"
 
-    <h2>2. Verilerin Paylaşılması ve Saklanması</h2>
-    <p>Uygulama aracılığıyla toplanan konum verileri:</p>
-    <ul>
-        <li>Üçüncü taraf reklam ağları, kurumlar veya kişilerle <strong>kesinlikle paylaşılmaz, satılmaz veya kiralanmaz</strong>.</li>
-        <li>Kişisel olarak tanımlanabilir kimlik bilgileriyle ilişkilendirilmez ve sunucularda kalıcı olarak depolanmaz.</li>
-    </ul>
+# ==========================================
+# 2. MODELİ VE TOKENIZER'I YÜKLEME
+# ==========================================
+print(f"📥 Temel model yükleniyor: {model_name}...")
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name = model_name,
+    max_seq_length = max_seq_length,
+    dtype = dtype,
+    load_in_4bit = load_in_4bit,
+)
 
-    <h2>3. İzinler</h2>
-    <p>Uygulamanın düzgün çalışabilmesi için şu izinler gerekebilir:</p>
-    <ul>
-        <li><strong>Konum İzni (Location):</strong> Size en yakın şehre veya koordinata ait doğru namaz vakitlerini hesaplayabilmek için istenir. Bu izni cihazınızın ayarlarından dilediğiniz zaman kapatabilirsiniz (ancak bu durumda otomatik konum bazlı vakit hesaplaması çalışmayabilir).</li>
-    </ul>
+# ==========================================
+# 3. LoRA ADAPTÖRLERİNİ EKLEME (PEFT)
+# ==========================================
+# Modelin tamamını eğitmek yerine sadece belirli katmanlara (q_proj, v_proj vb.) 
+# LoRA adaptörleri ekleyerek hafif bir eğitim alanı yaratıyoruz.
+print("⚙️ LoRA adaptörleri modele entegre ediliyor...")
+model = FastLanguageModel.get_peft_model(
+    model,
+    r = 16, # Rank değeri (Genellikle 8, 16 veya 32 seçilir, ne kadar yüksekse o kadar detay öğrenir)
+    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    lora_alpha = 16,
+    lora_dropout = 0, # Dropout oranı (0 en iyisi ve en kararlısıdır)
+    bias = "none",    # Bias optimizasyonu kapalı
+    use_gradient_checkpointing = "unsloth", # Bellek tasarrufu için kritik ayar
+)
 
-    <h2>4. Çocukların Gizliliği</h2>
-    <p>Uygulamamız her yaştan kullanıcı için uygundur ve bilerek 13 yaş altı çocuklardan kişisel veri veya hassas bilgi toplamaz.</p>
+# ==========================================
+# 4. 1. ÖDEVDE YÜKLEDİĞİMİZ VERİ SETİNİ ÇEKME
+# ==========================================
+# Hugging Face profiline kendi yüklediğin veri setinin yolunu buraya yazmalısın:
+dataset_repo = "Aysenur44/magibu_ai_ozel_veri_seti"
+print(f"📂 Hugging Face'ten veri seti indiriliyor: {dataset_repo}")
 
-    <h2>5. Gizlilik Politikasındaki Değişiklikler</h2>
-    <p>Bu gizlilik politikasını zaman zaman güncelleyebiliriz. Yapılan değişiklikler bu sayfada yayınlanacak ve "Son güncelleme" tarihi güncellenecektir. Politikamızı düzenli olarak gözden geçirmeniz önerilir.</p>
+dataset = load_dataset(dataset_repo, split="turkish")
 
-    <h2>6. İletişim</h2>
-    <p>Gizlilik politikamızla ilgili herhangi bir sorunuz veya endişeniz varsa, bizimle şu adresten iletişime geçebilirsiniz:</p>
-    <p><strong>E-posta:</strong> aysenuryesilovaofficial@gmail.com </p>
+# ==========================================
+# 5. EĞİTİCİ (TRAINER) YAPILANDIRMASI
+# ==========================================
+# Modelin nasıl eğitileceğini, kaç adım süreceğini ve öğrenme oranını ayarlıyoruz.
+trainer = SFTTrainer(
+    model = model,
+    tokenizer = tokenizer,
+    train_dataset = dataset,
+    dataset_text_field = "conversations", # Veri setimizdeki anahtar sütun adı
+    max_seq_length = max_seq_length,
+    dataset_num_proc = 2,
+    args = TrainingArguments(
+        per_device_train_batch_size = 2, # Ekran kartı başına düşen paket boyutu
+        gradient_accumulation_steps = 4, # Gradyan biriktirme adımı
+        warmup_steps = 5,                # Başlangıç ısınma adımları
+        max_steps = 30,                  # Ödev için kısa tutulmuş toplam eğitim adımı
+        learning_rate = 2e-4,            # Öğrenme hızı (Learning rate)
+        fp16 = not torch.cuda.is_bf16_supported(),
+        bf16 = torch.cuda.is_bf16_supported(),
+        logging_steps = 1,
+        output_dir = "outputs",          # Çıktıların geçici saklanacağı yer
+    ),
+)
 
-</body>
-</html>
+# ==========================================
+# 6. EĞİTİMİ BAŞLATMA
+# ==========================================
+print("🔥 Model eğitimi (Fine-Tuning) başladı...")
+trainer_stats = trainer.train()
+print("🎉 Model eğitimi başarıyla tamamlandı!")
+
+# ==========================================
+# 7. LoRA ADAPTÖRÜNÜ HUGGING FACE'E YÜKLEME
+# ==========================================
+# Çıkan LoRA ağırlıklarını paketleyip Hugging Face profiline gönderiyoruz.
+lora_repo = "Aysenur44/magibu_ai_lora_adaptor" # Kendi HF repo adın
+print(f"🌐 LoRA adaptörü Hugging Face'e yükleniyor: {lora_repo}")
+
+model.push_to_hub_merged(
+    lora_repo,
+    tokenizer,
+    save_method = "lora", # Sadece LoRA adaptörünü yüklüyoruz
+    token = None          # Eğer terminalde login yaptıysan burası None kalabilir
+)
+
+print("🎯 Tebrikler! 3. Ödev de başarıyla tamamlandı ve LoRA adaptörün yayına alındı!")
