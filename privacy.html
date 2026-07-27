@@ -1,100 +1,68 @@
-import torch
-from unsloth import FastLanguageModel
-from datasets import load_dataset
-from trl import SFTTrainer
-from transformers import TrainingArguments
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Ezan Vakti</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .date {
+            color: #666;
+            font-style: italic;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
 
-print("🚀 3. Ödev: Unsloth ile Model Fine-Tune (LoRA) Eğitimi Başlatılıyor...")
+    <h1>Privacy Policy</h1>
+    <div class="date">Last updated: July 27, 2026</div>
 
-# ==========================================
-# 1. AYARLAR VE PARAMETRELER
-# ==========================================
-max_seq_length = 2048  # Modelin tek seferde okuyabileceği maksimum token uzunluğu
-dtype = None  # Otomatik algılama (Float16 veya Bfloat16)
-load_in_4bit = True  # Bellek tasarrufu için modeli 4-bit sıkıştırarak yüklüyoruz
+    <p><strong>Ezan Vakti</strong> ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how our mobile application handles your information.</p>
 
-# Eğitmek için seçeceğimiz temel model (Unsloth optimize edilmiş Llama modeli)
-model_name = "unsloth/Llama-3-8B-Instruct"
+    <h2>1. Information We Collect</h2>
+    <p>Our application is designed with user privacy in mind. We do not require user registration, login, or account creation.</p>
+    <ul>
+        <li><strong>Location Data:</strong> The app requests approximate/precise location permission solely to calculate accurate prayer times based on your current geographical coordinates. Location data is processed locally on your device or sent directly to the prayer times API to fetch times, and it is <strong>never</strong> stored on or transmitted to any developer servers.</li>
+        <li><strong>Local Storage (SharedPreferences):</strong> The app stores your preferences locally on your device (such as selected city, district, notification settings, and theme preferences). This data never leaves your device.</li>
+    </ul>
 
-# ==========================================
-# 2. MODELİ VE TOKENIZER'I YÜKLEME
-# ==========================================
-print(f"📥 Temel model yükleniyor: {model_name}...")
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = model_name,
-    max_seq_length = max_seq_length,
-    dtype = dtype,
-    load_in_4bit = load_in_4bit,
-)
+    <h2>2. Third-Party Services</h2>
+    <p><strong>Prayer Times API:</strong> The app uses the public <em>AlAdhan API</em> to fetch daily prayer times. Only your location coordinates or region parameters are transmitted over HTTPS to retrieve these times.</p>
 
-# ==========================================
-# 3. LoRA ADAPTÖRLERİNİ EKLEME (PEFT)
-# ==========================================
-# Modelin tamamını eğitmek yerine sadece belirli katmanlara (q_proj, v_proj vb.) 
-# LoRA adaptörleri ekleyerek hafif bir eğitim alanı yaratıyoruz.
-print("⚙️ LoRA adaptörleri modele entegre ediliyor...")
-model = FastLanguageModel.get_peft_model(
-    model,
-    r = 16, # Rank değeri (Genellikle 8, 16 veya 32 seçilir, ne kadar yüksekse o kadar detay öğrenir)
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-    lora_alpha = 16,
-    lora_dropout = 0, # Dropout oranı (0 en iyisi ve en kararlısıdır)
-    bias = "none",    # Bias optimizasyonu kapalı
-    use_gradient_checkpointing = "unsloth", # Bellek tasarrufu için kritik ayar
-)
+    <h2>3. Permissions</h2>
+    <ul>
+        <li><strong>Location:</strong> Used strictly for calculating prayer times.</li>
+        <li><strong>Notifications:</strong> Used locally via <code>flutter_local_notifications</code> to remind you of prayer times.</li>
+        <li><strong>Internet:</strong> Used exclusively to fetch prayer times from the AlAdhan API.</li>
+    </ul>
 
-# ==========================================
-# 4. 1. ÖDEVDE YÜKLEDİĞİMİZ VERİ SETİNİ ÇEKME
-# ==========================================
-# Hugging Face profiline kendi yüklediğin veri setinin yolunu buraya yazmalısın:
-dataset_repo = "Aysenur44/magibu_ai_ozel_veri_seti"
-print(f"📂 Hugging Face'ten veri seti indiriliyor: {dataset_repo}")
+    <h2>4. Data Sharing</h2>
+    <p>We do not collect, store, share, or sell any personal data to third parties. There are no analytics tools, crash reporters, or advertising networks (such as Google AdMob or Firebase) integrated into the app.</p>
 
-dataset = load_dataset(dataset_repo, split="turkish")
+    <h2>5. Children's Privacy</h2>
+    <p>Our app does not knowingly collect any personal information from children under the age of 13.</p>
 
-# ==========================================
-# 5. EĞİTİCİ (TRAINER) YAPILANDIRMASI
-# ==========================================
-# Modelin nasıl eğitileceğini, kaç adım süreceğini ve öğrenme oranını ayarlıyoruz.
-trainer = SFTTrainer(
-    model = model,
-    tokenizer = tokenizer,
-    train_dataset = dataset,
-    dataset_text_field = "conversations", # Veri setimizdeki anahtar sütun adı
-    max_seq_length = max_seq_length,
-    dataset_num_proc = 2,
-    args = TrainingArguments(
-        per_device_train_batch_size = 2, # Ekran kartı başına düşen paket boyutu
-        gradient_accumulation_steps = 4, # Gradyan biriktirme adımı
-        warmup_steps = 5,                # Başlangıç ısınma adımları
-        max_steps = 30,                  # Ödev için kısa tutulmuş toplam eğitim adımı
-        learning_rate = 2e-4,            # Öğrenme hızı (Learning rate)
-        fp16 = not torch.cuda.is_bf16_supported(),
-        bf16 = torch.cuda.is_bf16_supported(),
-        logging_steps = 1,
-        output_dir = "outputs",          # Çıktıların geçici saklanacağı yer
-    ),
-)
+    <h2>6. Changes to This Privacy Policy</h2>
+    <p>We may update our Privacy Policy from time im to time. Any changes will be posted on this page with an updated revision date.</p>
 
-# ==========================================
-# 6. EĞİTİMİ BAŞLATMA
-# ==========================================
-print("🔥 Model eğitimi (Fine-Tuning) başladı...")
-trainer_stats = trainer.train()
-print("🎉 Model eğitimi başarıyla tamamlandı!")
+    <h2>7. Contact Us</h2>
+    <p>If you have any questions or suggestions about our Privacy Policy, please contact us at:</p>
+    <p><strong>Email:</strong> aysenuryesilova@gmail.com *(Lütfen kendi e-posta adresini yaz)*</p>
 
-# ==========================================
-# 7. LoRA ADAPTÖRÜNÜ HUGGING FACE'E YÜKLEME
-# ==========================================
-# Çıkan LoRA ağırlıklarını paketleyip Hugging Face profiline gönderiyoruz.
-lora_repo = "Aysenur44/magibu_ai_lora_adaptor" # Kendi HF repo adın
-print(f"🌐 LoRA adaptörü Hugging Face'e yükleniyor: {lora_repo}")
-
-model.push_to_hub_merged(
-    lora_repo,
-    tokenizer,
-    save_method = "lora", # Sadece LoRA adaptörünü yüklüyoruz
-    token = None          # Eğer terminalde login yaptıysan burası None kalabilir
-)
-
-print("🎯 Tebrikler! 3. Ödev de başarıyla tamamlandı ve LoRA adaptörün yayına alındı!")
+</body>
+</html>
