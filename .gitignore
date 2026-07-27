@@ -43,4 +43,4 @@ app.*.map.json
 /android/app/release
 
 build/
-.gradle/
+.gradle/-e "\n# Security - Exclude sensitive files\nkey.properties\n*.jks" 
