@@ -15,7 +15,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.aysenuryesilova.ezanvakti"
-    compileSdk = 36
+    compileSdk = 35
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -29,8 +29,8 @@ android {
 
     defaultConfig {
         applicationId = "com.aysenuryesilova.ezanvakti"
-        minSdk = flutter.minSdkVersion
-        targetSdk = 36
+        minSdk = 21
+        targetSdk = 35
         versionCode = 3
         versionName = "3.0"
     }

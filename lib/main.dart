@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:typed_data';
+import 'dart:ui' show ImageFilter;
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -11,11 +12,397 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:share_plus/share_plus.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
+
+// ==================== KUSURSUZ VE CANLI iOS TEMA MOTORU ====================
+enum AppThemeMode {
+  rose,      // Gül Pembe (Varsayılan Açılış Teması)
+  emerald,   // Zümrüt Yeşili
+  navy,      // Safir Gece Mavisi
+  obsidian,  // Obsidian Altın
+  amber,     // Sıcak Kehribar & Bal
+  purple,    // Asil Mor & Leylak
+  teal,      // Okyanus Turkuazı
+  ruby,      // Yakut Kırmızı
+}
+
+class AppThemeData {
+  final String name;
+  final Color primary;
+  final Color secondary;
+  final Color accent;
+  final Color backgroundLight;
+  final Color backgroundDark;
+  final Color cardLight;
+  final Color cardDark;
+  final Color textLight;
+  final Color textDark;
+  final List<Color> bgGradientLight;
+  final List<Color> bgGradientDark;
+  final List<Color> cardGradientLight;
+  final List<Color> cardGradientDark;
+
+  const AppThemeData({
+    required this.name,
+    required this.primary,
+    required this.secondary,
+    required this.accent,
+    required this.backgroundLight,
+    required this.backgroundDark,
+    required this.cardLight,
+    required this.cardDark,
+    required this.textLight,
+    required this.textDark,
+    required this.bgGradientLight,
+    required this.bgGradientDark,
+    required this.cardGradientLight,
+    required this.cardGradientDark,
+  });
+
+  static AppThemeData getTheme(AppThemeMode mode) {
+    switch (mode) {
+      case AppThemeMode.rose:
+        return const AppThemeData(
+          name: "Gül Pembe 🌸",
+          primary: Color(0xFFE11D48),
+          secondary: Color(0xFFFB7185),
+          accent: Color(0xFFFFF1F2),
+          backgroundLight: Color(0xFFFFF1F2),
+          backgroundDark: Color(0xFF2A040D),
+          cardLight: Color(0xFFFFE4E6),
+          cardDark: Color(0xFF4C081A),
+          textLight: Color(0xFF9F1239),
+          textDark: Color(0xFFFECDD3),
+          bgGradientLight: [Color(0xFFFFF1F2), Color(0xFFFFD6E0), Color(0xFFFFB3C6)],
+          bgGradientDark: [Color(0xFF2A040D), Color(0xFF4A0818), Color(0xFF1F0208)],
+          cardGradientLight: [Color(0xFFFFE4E6), Color(0xFFFFC2D1)],
+          cardGradientDark: [Color(0xFF5C0A21), Color(0xFF380514)],
+        );
+      case AppThemeMode.emerald:
+        return const AppThemeData(
+          name: "Zümrüt Yeşili 🌿",
+          primary: Color(0xFF047857),
+          secondary: Color(0xFF10B981),
+          accent: Color(0xFFECFDF5),
+          backgroundLight: Color(0xFFECFDF5),
+          backgroundDark: Color(0xFF022C22),
+          cardLight: Color(0xFFD1FAE5),
+          cardDark: Color(0xFF064E3B),
+          textLight: Color(0xFF065F46),
+          textDark: Color(0xFFA7F3D0),
+          bgGradientLight: [Color(0xFFECFDF5), Color(0xFFA7F3D0), Color(0xFF6EE7B7)],
+          bgGradientDark: [Color(0xFF022C22), Color(0xFF064E3B), Color(0xFF021B15)],
+          cardGradientLight: [Color(0xFFD1FAE5), Color(0xFFA7F3D0)],
+          cardGradientDark: [Color(0xFF064E3B), Color(0xFF022C22)],
+        );
+      case AppThemeMode.navy:
+        return const AppThemeData(
+          name: "Gece Mavisi 🌌",
+          primary: Color(0xFF1D4ED8),
+          secondary: Color(0xFF3B82F6),
+          accent: Color(0xFFEFF6FF),
+          backgroundLight: Color(0xFFEFF6FF),
+          backgroundDark: Color(0xFF0B132B),
+          cardLight: Color(0xFFDBEAFE),
+          cardDark: Color(0xFF1C2541),
+          textLight: Color(0xFF1E40AF),
+          textDark: Color(0xFFBFDBFE),
+          bgGradientLight: [Color(0xFFEFF6FF), Color(0xFFBFDBFE), Color(0xFF93C5FD)],
+          bgGradientDark: [Color(0xFF0B132B), Color(0xFF1C2541), Color(0xFF060B18)],
+          cardGradientLight: [Color(0xFFDBEAFE), Color(0xFFBFDBFE)],
+          cardGradientDark: [Color(0xFF1C2541), Color(0xFF0B132B)],
+        );
+      case AppThemeMode.obsidian:
+        return const AppThemeData(
+          name: "Obsidian Altın 🖤",
+          primary: Color(0xFFD97706),
+          secondary: Color(0xFFFACC15),
+          accent: Color(0xFFFEFCE8),
+          backgroundLight: Color(0xFFFEFCE8),
+          backgroundDark: Color(0xFF09090B),
+          cardLight: Color(0xFFFEF08A),
+          cardDark: Color(0xFF18181B),
+          textLight: Color(0xFF854D0E),
+          textDark: Color(0xFFFDE047),
+          bgGradientLight: [Color(0xFFFEFCE8), Color(0xFFFEF08A), Color(0xFFFDE047)],
+          bgGradientDark: [Color(0xFF09090B), Color(0xFF18181B), Color(0xFF000000)],
+          cardGradientLight: [Color(0xFFFEF08A), Color(0xFFFDE047)],
+          cardGradientDark: [Color(0xFF27272A), Color(0xFF18181B)],
+        );
+      case AppThemeMode.amber:
+        return const AppThemeData(
+          name: "Kehribar & Bal 🍯",
+          primary: Color(0xFFD97706),
+          secondary: Color(0xFFF59E0B),
+          accent: Color(0xFFFFFBEB),
+          backgroundLight: Color(0xFFFFFBEB),
+          backgroundDark: Color(0xFF1C1917),
+          cardLight: Color(0xFFFEF3C7),
+          cardDark: Color(0xFF292524),
+          textLight: Color(0xFF92400E),
+          textDark: Color(0xFFFDE68A),
+          bgGradientLight: [Color(0xFFFFFBEB), Color(0xFFFDE68A), Color(0xFFFCD34D)],
+          bgGradientDark: [Color(0xFF1C1917), Color(0xFF292524), Color(0xFF0C0A09)],
+          cardGradientLight: [Color(0xFFFEF3C7), Color(0xFFFDE68A)],
+          cardGradientDark: [Color(0xFF44403C), Color(0xFF292524)],
+        );
+      case AppThemeMode.purple:
+        return const AppThemeData(
+          name: "Mor & Leylak 💜",
+          primary: Color(0xFF7E22CE),
+          secondary: Color(0xFFA855F7),
+          accent: Color(0xFFFAF5FF),
+          backgroundLight: Color(0xFFFAF5FF),
+          backgroundDark: Color(0xFF170624),
+          cardLight: Color(0xFFF3E8FF),
+          cardDark: Color(0xFF2D0945),
+          textLight: Color(0xFF6B21A8),
+          textDark: Color(0xFFE9D5FF),
+          bgGradientLight: [Color(0xFFFAF5FF), Color(0xFFE9D5FF), Color(0xFFD8B4FE)],
+          bgGradientDark: [Color(0xFF170624), Color(0xFF2D0945), Color(0xFF0E0317)],
+          cardGradientLight: [Color(0xFFF3E8FF), Color(0xFFE9D5FF)],
+          cardGradientDark: [Color(0xFF3B0C5A), Color(0xFF2D0945)],
+        );
+      case AppThemeMode.teal:
+        return const AppThemeData(
+          name: "Okyanus Turkuazı 🌊",
+          primary: Color(0xFF0D9488),
+          secondary: Color(0xFF14B8A6),
+          accent: Color(0xFFF0FDFA),
+          backgroundLight: Color(0xFFF0FDFA),
+          backgroundDark: Color(0xFF042F2C),
+          cardLight: Color(0xFFCCFBF1),
+          cardDark: Color(0xFF0D4744),
+          textLight: Color(0xFF115E59),
+          textDark: Color(0xFF99F6E4),
+          bgGradientLight: [Color(0xFFF0FDFA), Color(0xFF99F6E4), Color(0xFF5EEAD4)],
+          bgGradientDark: [Color(0xFF042F2C), Color(0xFF0D4744), Color(0xFF021E1C)],
+          cardGradientLight: [Color(0xFFCCFBF1), Color(0xFF99F6E4)],
+          cardGradientDark: [Color(0xFF115E59), Color(0xFF0D4744)],
+        );
+      case AppThemeMode.ruby:
+        return const AppThemeData(
+          name: "Yakut Kırmızı 🍷",
+          primary: Color(0xFFBE123C),
+          secondary: Color(0xFFFB7185),
+          accent: Color(0xFFFFF1F2),
+          backgroundLight: Color(0xFFFFF1F2),
+          backgroundDark: Color(0xFF1F040A),
+          cardLight: Color(0xFFFFE4E6),
+          cardDark: Color(0xFF380714),
+          textLight: Color(0xFF9F1239),
+          textDark: Color(0xFFFECDD3),
+          bgGradientLight: [Color(0xFFFFF1F2), Color(0xFFFECDD3), Color(0xFFFDA4AF)],
+          bgGradientDark: [Color(0xFF1F040A), Color(0xFF380714), Color(0xFF120206)],
+          cardGradientLight: [Color(0xFFFFE4E6), Color(0xFFFECDD3)],
+          cardGradientDark: [Color(0xFF4C091C), Color(0xFF380714)],
+        );
+    }
+  }
+}
+
+// TÜRKİYE EXHAUSTIVE 81 İL VE TÜM İLÇELERİ LİSTESİ
+class TurkiyeSehirler {
+  static final Map<String, List<String>> ilIlceMap = {
+    "Adana": ["Aladağ", "Ceyhan", "Çukurova", "Feke", "İmamoğlu", "Karaisalı", "Karataş", "Kozan", "Pozantı", "Saimbeyli", "Sarıçam", "Seyhan", "Tufanbeyli", "Yumurtalık", "Yüreğir"],
+    "Adıyaman": ["Besni", "Çelikhan", "Gerger", "Gölbaşı", "Kahta", "Merkez", "Samsat", "Sincik", "Tut"],
+    "Afyonkarahisar": ["Başmakçı", "Bayat", "Bolvadin", "Çay", "Çobanlar", "Dazkırı", "Dinar", "Emirdağ", "Evciler", "Hocalar", "İhsaniye", "İscehisar", "Kızılören", "Merkez", "Sandıklı", "Sinanpaşa", "Sultandağı", "Şuhut"],
+    "Ağrı": ["Diyadin", "Doğubayazıt", "Eleşkirt", "Hamur", "Merkez", "Patnos", "Taşlıçay", "Tutak"],
+    "Amasya": ["Göynücek", "Gümüşhacıköy", "Hamamözü", "Merkez", "Merzifon", "Suluova", "Taşova"],
+    "Ankara": ["Akyurt", "Altındağ", "Ayaş", "Bala", "Beypazarı", "Çamlıdere", "Çankaya", "Çubuk", "Elmadağ", "Etimesgut", "Evren", "Gölbaşı", "Güdül", "Haymana", "Kahramankazan", "Kalecik", "Keçiören", "Kızılcahamam", "Mamak", "Nallıhan", "Polatlı", "Pursaklar", "Sincan", "Şereflikoçhisar", "Yenimahalle"],
+    "Antalya": ["Akseki", "Aksu", "Alanya", "Demre", "Döşemealtı", "Elmalı", "Finike", "Gazipaşa", "Gündoğmuş", "İbradı", "Kaş", "Kemer", "Kepez", "Konyaaltı", "Korkuteli", "Kumluca", "Manavgat", "Muratpaşa", "Serik"],
+    "Artvin": ["Ardanuç", "Arhavi", "Borçka", "Hopa", "Kemalpaşa", "Merkez", "Murgul", "Şavşat", "Yusufeli"],
+    "Aydın": ["Bozdoğan", "Buharkent", "Çine", "Didim", "Efeler", "Germencik", "İncirliova", "Karacasu", "Karpuzlu", "Koçarlı", "Köşk", "Kuşadası", "Kuyucak", "Nazilli", "Söke", "Sultanhisar", "Yenipazar"],
+    "Balıkesir": ["Altıeylül", "Ayvalık", "Balya", "Bandırma", "Bigadiç", "Burhaniye", "Dursunbey", "Edremit", "Erdek", "Gömeç", "Gönen", "Havran", "İvrindi", "Karesi", "Kepsut", "Manyas", "Marmara", "Savaştepe", "Sındırgı", "Susurluk"],
+    "Bilecik": ["Bozüyük", "Gölpazarı", "İnhisar", "Merkez", "Osmaneli", "Pazaryeri", "Söğüt", "Yenipazar"],
+    "Bingöl": ["Adaklı", "Genç", "Karlıova", "Kiğı", "Merkez", "Solhan", "Yayladere", "Yedisu"],
+    "Bitlis": ["Adilcevaz", "Ahlat", "Güroymak", "Hizan", "Merkez", "Mutki", "Tatvan"],
+    "Bolu": ["Dörtdivan", "Gerede", "Göynük", "Kıbrıscık", "Mengen", "Merkez", "Mudurnu", "Seben", "Yeniçağa"],
+    "Burdur": ["Ağlasun", "Altınyayla", "Bucak", "Çavdır", "Çeltikçi", "Gölhisar", "Karamanlı", "Kemer", "Merkez", "Tefenni", "Yeşilova"],
+    "Bursa": ["Büyükorhan", "Gemlik", "Gürsu", "Harmancık", "İnegöl", "İznik", "Karacabey", "Keles", "Kestel", "Mudanya", "Mustafakemalpaşa", "Nilüfer", "Orhaneli", "Orhangazi", "Osmangazi", "Yenişehir", "Yıldırım"],
+    "Çanakkale": ["Ayvacık", "Bayramiç", "Biga", "Bozcaada", "Çan", "Eceabat", "Ezine", "Gelibolu", "Gökçeada", "Lapseki", "Merkez", "Yenice"],
+    "Çankırı": ["Atkaracalar", "Bayramören", "Çerkeş", "Eldivan", "Ilgaz", "Kızılırmak", "Korgun", "Kurşunlu", "Merkez", "Orta", "Şabanözü", "Yapraklı"],
+    "Çorum": ["Alaca", "Bayat", "Boğazkale", "Dodurga", "İskilip", "Kargı", "Laçin", "Mecitözü", "Merkez", "Oğuzlar", "Ortaköy", "Osmancık", "Sungurlu", "Uğurludağ"],
+    "Denizli": ["Acıpayam", "Babadağ", "Baklan", "Bekilli", "Beyağaç", "Bozkurt", "Buldan", "Çal", "Çameli", "Çardak", "Çivril", "Güney", "Honaz", "Kale", "Merkezefendi", "Pamukkale", "Sarayköy", "Serinhisar", "Tavas"],
+    "Diyarbakır": ["Bağlar", "Bismil", "Çermik", "Çınar", "Çüngüş", "Dicle", "Eğil", "Ergani", "Hani", "Hazro", "Kayapınar", "Kocaköy", "Kulp", "Lice", "Silvan", "Sur", "Yenişehir"],
+    "Edirne": ["Enez", "Havsa", "İpsala", "Keşan", "Lalapaşa", "Meriç", "Merkez", "Süloğlu", "Uzunköprü"],
+    "Elazığ": ["Ağın", "Alacakaya", "Arıcak", "Baskil", "Karakoçan", "Keban", "Kovancılar", "Maden", "Merkez", "Palu", "Sivrice"],
+    "Erzincan": ["Çayırlı", "İliç", "Kemah", "Kemaliye", "Merkez", "Otlukbeli", "Refahiye", "Tercan", "Üzümlü"],
+    "Erzurum": ["Aşkale", "Aziziye", "Çat", "Hınıs", "Horasan", "İspir", "Karaçoban", "Karayazı", "Köprüköy", "Narman", "Oltu", "Olur", "Palandöken", "Pasinler", "Pazaryolu", "Şenkaya", "Tekman", "Tortum", "Uzundere", "Yakutiye"],
+    "Eskişehir": ["Alpu", "Beylikova", "Çifteler", "Günyüzü", "Han", "İnönü", "Mahmudiye", "Mihalgazi", "Mihalıççık", "Odunpazarı", "Seyitgazi", "Sivrihisar", "Tepebaşı"],
+    "Gaziantep": ["Arabam", "İslahiye", "Karkamış", "Nizip", "Oğuzeli", "Nurdağı", "Şahinbey", "Şehitkamil", "Yavuzeli"],
+    "Giresun": ["Alucra", "Bulancak", "Çamoluk", "Çanakçı", "Dereli", "Doğankent", "Espiye", "Eynesil", "Görele", "Güce", "Keşap", "Merkez", "Piraziz", "Şebinkarahisar", "Tirebolu", "Yağlıdere"],
+    "Gümüşhane": ["Kelkit", "Köse", "Kürtün", "Merkez", "Şiran", "Torul"],
+    "Hakkari": ["Çukurca", "Derecik", "Merkez", "Şemdinli", "Yüksekova"],
+    "Hatay": ["Altınözü", "Antakya", "Arsuz", "Belen", "Defne", "Dörtyol", "Ezin", "Hassa", "İskenderun", "Kırıkhan", "Kumlu", "Payas", "Reyhanlı", "Samandağ", "Yayladağı"],
+    "Isparta": ["Aksu", "Atabey", "Eğirdir", "Gelendost", "Gönen", "Keçiborlu", "Merkez", "Senirkent", "Sütçüler", "Şarkikaraağaç", "Uluborlu", "Yalvaç", "Yenişarbademli"],
+    "Mersin": ["Akdeniz", "Anamur", "Aydıncık", "Bozyazı", "Çamlıyayla", "Erdemli", "Gülnar", "Mezitli", "Mut", "Silifke", "Tarsus", "Toroslar", "Yenişehir"],
+    "İstanbul": ["Adalar", "Arnavutköy", "Ataşehir", "Avcılar", "Bağcılar", "Bahçelievler", "Bakırköy", "Başakşehir", "Bayrampaşa", "Beşiktaş", "Beykoz", "Beylikdüzü", "Beyoğlu", "Büyükçekmece", "Çatalca", "Çekmeköy", "Esenler", "Esenyurt", "Eyüpsultan", "Fatih", "Gaziosmanpaşa", "Güngören", "Kadıköy", "Kağıthane", "Kartal", "Küçükçekmece", "Maltepe", "Pendik", "Sancaktepe", "Sarıyer", "Silivri", "Sultanbeyli", "Sultangazi", "Şile", "Şişli", "Tuzla", "Ümraniye", "Üsküdar", "Zeytinburnu"],
+    "İzmir": ["Aliağa", "Balçova", "Bayındır", "Bayraklı", "Bergama", "Beydağ", "Bornova", "Buca", "Çeşme", "Çiğli", "Dikili", "Foça", "Gaziemir", "Güzelbahçe", "Karabağlar", "Karaburun", "Karşıyaka", "Kemalpaşa", "Kınık", "Kiraz", "Konak", "Menderes", "Menemen", "Narlıdere", "Ödemiş", "Seferihisar", "Selçuk", "Tire", "Torbalı", "Urla"],
+    "Kars": ["Akyaka", "Arpaçay", "Digor", "Kağızman", "Merkez", "Sarıkamış", "Selim", "Susuz"],
+    "Kastamonu": ["Abana", "Ağlı", "Araç", "Azdavay", "Bozkurt", "Cide", "Çatalzeytin", "Daday", "Devrekani", "Doğanyurt", "Hanönü", "İhsangazi", "İnebolu", "Küre", "Merkez", "Pınarbaşı", "Seydiler", "Şenpazar", "Taşköprü", "Tosya"],
+    "Kayseri": ["Akkışla", "Bünyan", "Develi", "Felahiye", "Hacılar", "İncesu", "Kocasinan", "Melikgazi", "Özvatan", "Pınarbaşı", "Sarıoğlan", "Sarız", "Talas", "Tomarza", "Yahyalı", "Yeşilhisar"],
+    "Kırklareli": ["Babaeski", "Demirköy", "Kofçaz", "Lüleburgaz", "Merkez", "Pehlivanköy", "Pınarhisar", "Vize"],
+    "Kırşehir": ["Akçakent", "Akpınar", "Boztepe", "Çiçekdağı", "Kaman", "Merkez", "Mucur"],
+    "Kocaeli": ["Başiskele", "Çayırova", "Darıca", "Derince", "Dilovası", "Gebze", "Gölcük", "İzmit", "Kandıra", "Karamürsel", "Kartepe", "Körfez"],
+    "Konya": ["Ahırlı", "Akören", "Akşehir", "Altınekin", "Beyşehir", "Bozkır", "Cihanbeyli", "Çeltik", "Çumra", "Derbent", "Derebucak", "Doğanhisar", "Emirgazi", "Ereğli", "Güneysınır", "Hadim", "Halkapınar", "Hüyük", "Ilgın", "Kadınhanı", "Karapınar", "Karatay", "Kulu", "Meram", "Sarayönü", "Selçuklu", "Seydişehir", "Taşkent", "Tuzlukçu", "Yalıhüyük", "Yunak"],
+    "Kütahya": ["Altıntaş", "Aslanapa", "Çavdarhisar", "Domaniç", "Dumlupınar", "Emet", "Gediz", "Hisarcık", "Merkez", "Pazarlar", "Şaphane", "Simav", "Tavşanlı"],
+    "Malatya": ["Akçadağ", "Arapgir", "Arguvan", "Battalgazi", "Darende", "Doğanşehir", "Doğanyol", "Hekimhan", "Kale", "Kuluncak", "Pütürge", "Yazıhan", "Yeşilyurt"],
+    "Manisa": ["Ahmetli", "Akhisar", "Alaşehir", "Demirci", "Gölmarmara", "Gördes", "Kırkağaç", "Köprübaşı", "Kula", "Salihli", "Sarıgöl", "Saruhanlı", "Selendi", "Soma", "Şehzadeler", "Turgutlu", "Yunusemre"],
+    "Kahramanmaraş": ["Afşin", "Andırın", "Çağlayancerit", "Dulkadiroğlu", "Ekinözü", "Elbistan", "Göksun", "Nurhak", "Onikişubat", "Pazarcık", "Türkoğlu"],
+    "Mardin": ["Artuklu", "Dargeçit", "Derik", "Kızıltepe", "Mazıdağı", "Midyat", "Nusaybin", "Ömerli", "Savur", "Yeşilli"],
+    "Muğla": ["Bodrum", "Dalaman", "Datça", "Fethiye", "Kavaklıdere", "Köyceğiz", "Marmaris", "Menteşe", "Milas", "Ortaca", "Seydikemer", "Ula", "Yatağan"],
+    "Muş": ["Bulanık", "Hasköy", "Korkut", "Malazgirt", "Merkez", "Varto"],
+    "Nevşehir": ["Acıgöl", "Avanos", "Derinkuyu", "Gülşehir", "Hacıbektaş", "Kozaklı", "Merkez", "Ürgüp"],
+    "Niğde": ["Altunhisar", "Bor", "Çamardı", "Çiftlik", "Merkez", "Ulukışla"],
+    "Ordu": ["Akkuş", "Altınordu", "Aybastı", "Çamaş", "Çatalpınar", "Çaybaşı", "Fatsa", "Gölköy", "Gülyalı", "Gürgentepe", "İkizce", "Kabadüz", "Kabataş", "Korgan", "Kumru", "Mescudiye", "Ünye", "Ulubey"],
+    "Rize": ["Ardeşen", "Çamlıhemşin", "Çayeli", "Derepazarı", "Fındıklı", "Güneysu", "Hemşin", "İkizdere", "İyidere", "Kalkandere", "Merkez", "Pazar"],
+    "Sakarya": ["Adapazarı", "Akyazı", "Arifiye", "Erenler", "Ferizli", "Geyve", "Hendek", "Karapürçek", "Karasu", "Kaynarca", "Kocaali", "Pamukova", "Sapanca", "Serdivan", "Söğütlü", "Taraklı"],
+    "Samsun": ["19 Mayıs", "Alaçam", "Asarcık", "Atakum", "Bafra", "Canik", "Çarşamba", "Havza", "İlkadım", "Kavak", "Ladik", "Salıpazarı", "Tekkeköy", "Terme", "Vezirköprü", "Yakakent"],
+    "Siirt": ["Baykan", "Eruh", "Kurtalan", "Merkez", "Pervari", "Şirvan", "Tillo"],
+    "Sinop": ["Boyabat", "Dikmen", "Durağan", "Erfelek", "Gerze", "Merkez", "Saraydüzü", "Türkeli"],
+    "Sivas": ["Akıncılar", "Altınyayla", "Divriği", "Doğanşar", "Gemerek", "Gölova", "Gürün", "Hafik", "İmranlı", "Kangal", "Koyulhisar", "Merkez", "Suşehri", "Şarkışla", "Ulaş", "Yıldızeli", "Zara"],
+    "Tekirdağ": ["Çerkezköy", "Çorlu", "Ergene", "Hayrabolu", "Kapaklı", "Malkara", "Marmaraereğlisi", "Muratlı", "Saray", "Süleymanpaşa", "Şarköy"],
+    "Tokat": ["Almus", "Artova", "Başçiftlik", "Erbaa", "Merkez", "Niksar", "Pazar", "Reşadiye", "Sulusaray", "Yeşilyurt", "Zile"],
+    "Trabzon": ["Akçaabat", "Araklı", "Arsin", "Beşikdüzü", "Çarşıbaşı", "Çaykara", "Dernekpazarı", "Düzköy", "Hayrat", "Köprübaşı", "Maçka", "Of", "Ortahisar", "Sürmene", "Şalpazarı", "Tonya", "Vakfıkebir", "Yomra"],
+    "Tunceli": ["Çemişgezek", "Hozat", "Mazgirt", "Nazımiye", "Ovacık", "Pertek", "Pülümür", "Merkez"],
+    "Şanlıurfa": ["Akçakale", "Birecik", "Bozova", "Ceylanpınar", "Eyyübiye", "Halfeti", "Haliliye", "Harran", "Hilvan", "Karaköprü", "Siverek", "Suruç", "Viranşehir"],
+    "Uşak": ["Banaz", "Eşme", "Karahallı", "Merkez", "Sivaslı", "Ulubey"],
+    "Van": ["Bahçesaray", "Başkale", "Çaldıran", "Çatak", "Edremit", "Erciş", "Gevaş", "Gürpınar", "İpekyolu", "Muradiye", "Özalp", "Saray", "Tuşba"],
+    "Yozgat": ["Akdağmadeni", "Aydıncık", "Boğazlıyan", "Çandır", "Çayıralan", "Çekerek", "Kadışehri", "Merkez", "Saraykent", "Sarıkaya", "Sorgun", "Şefaatli", "Yenifakılı", "Yerköy"],
+    "Zonguldak": ["Alaplı", "Çaycuma", "Devrek", "Gökçebey", "Kilimli", "Kozlu", "Merkez"],
+    "Aksaray": ["Ağaçören", "Eskil", "Gülağaç", "Güzelyurt", "Merkez", "Ortaköy", "Sarıyahşi", "Sultanhanı"],
+    "Bayburt": ["Aydıntepe", "Demirözü", "Merkez"],
+    "Karaman": ["Ayrancı", "Başyayla", "Ermenek", "Kazımkarabekir", "Merkez", "Sarıveliler"],
+    "Kırıkkale": ["Bahşılı", "Balışeyh", "Çelebi", "Delice", "Karakeçili", "Keskin", "Merkez", "Sulakyurt", "Yahşihan"],
+    "Batman": ["Beşiri", "Gercüş", "Hasankeyf", "Kozluk", "Merkez", "Sason"],
+    "Şırnak": ["Beytüşşebap", "Cizre", "Güçlükonak", "İdil", "Merkez", "Silopi", "Uludere"],
+    "Bartın": ["Amasra", "Kurucaşile", "Merkez", "Ulus"],
+    "Ardahan": ["Çıldır", "Damal", "Göle", "Hanak", "Merkez", "Posof"],
+    "Iğdır": ["Aralık", "Karakoyunlu", "Merkez", "Tuzluca"],
+    "Yalova": ["Altınova", "Armutlu", "Çınarcık", "Çiftlikköy", "Merkez", "Termal"],
+    "Karabük": ["Eflani", "Eskipazar", "Merkez", "Ovacık", "Safranbolu", "Yenice"],
+    "Kilis": ["Elbeyli", "Merkez", "Musabeyli", "Polateli"],
+    "Osmaniye": ["Bahçe", "Düziçi", "Hasanbeyli", "Kadirli", "Merkez", "Sumbas", "Toprakkale"],
+    "Düzce": ["Akçakoca", "Cumayeri", "Çilimli", "Gölyaka", "Gümüşova", "Kaynaşlı", "Merkez", "Yığılca"]
+  };
+
+  static List<String> get iller {
+    final list = ilIlceMap.keys.toList();
+    list.sort((a, b) => a.compareTo(b));
+    return list;
+  }
+
+  static List<String> getIlceler(String il) {
+    return ilIlceMap[il] ?? ["Merkez"];
+  }
+}
+
+// ==================== ONLİNE DUA/AYET/HADİS/ESMA SERVİSİ ====================
+class OnlineIcerikServisi {
+  static const List<Map<String, String>> zenginAyetler = [
+    {"ayet": "Şüphesiz güçlükle beraber bir kolaylık vardır. Gerçekten, güçlükle beraber bir kolaylık vardır.", "sure": "İnşirah Sûresi, 5-6"},
+    {"ayet": "Bilesiniz ki, kalpler ancak Allah'ı anmakla huzur bulur.", "sure": "Ra'd Sûresi, 28"},
+    {"ayet": "Ey iman edenler! Sabır ve namaz ile Allah'tan yardım isteyin. Çünkü Allah sabredenlerle beraberdir.", "sure": "Bakara Sûresi, 153"},
+    {"ayet": "Eğer şükrederseniz, elbette size nimetimi artırırım.", "sure": "İbrahim Sûresi, 7"},
+    {"ayet": "Rabbimiz! Bize dünyada da iyilik ver, ahirette de iyilik ver ve bizi cehennem azabından koru.", "sure": "Bakara Sûresi, 201"},
+    {"ayet": "Kullarıma söyle: En güzel sözü söylesinler. Çünkü şeytan aralarını bozmaya çalışır.", "sure": "İsrâ Sûresi, 53"},
+    {"ayet": "Nerede olursanız olun O sizinle beraberdir. Allah yaptıklarınızı hakkıyla görendir.", "sure": "Hadîd Sûresi, 4"},
+  ];
+
+  static const List<Map<String, String>> zenginHadisler = [
+    {"hadis": "Namaz, dinin direğidir. Onu kılan dinini ihya etmiş, terk eden ise dinini yıkmış olur.", "kaynak": "Tirmizî, İman 8"},
+    {"hadis": "Sizin en hayırlınız, ahlakı en güzel olanınızdır.", "kaynak": "Buhârî, Edeb 38"},
+    {"hadis": "Müslüman, elinden ve dilinden diğer müslümanların güvende olduğu kimsedir.", "kaynak": "Buhârî, İman 4"},
+    {"hadis": "Kolaylaştırınız, zorlaştırmayınız; müjdeleyiniz, nefret ettirmeyiniz.", "kaynak": "Buhârî, İlim 11"},
+    {"hadis": "Hiçbir baba, çocuğuna güzel ahlaktan daha üstün bir miras bırakamaz.", "kaynak": "Tirmizî, Birr 33"},
+    {"hadis": "Veren el, alan elden hayırlıdır.", "kaynak": "Buhârî, Zekât 18"},
+  ];
+
+  static const List<Map<String, String>> zenginDualar = [
+    {
+      "arapca": "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ",
+      "okunusu": "Rabbena atina fid-dunya haseneten ve fil-ahirati haseneten ve qina 'azaben-nar.",
+      "anlamı": "Rabbimiz! Bize dünyada da iyilik ver, ahirette de iyilik ver ve bizi cehennem azabından koru."
+    },
+    {
+      "arapca": "اللَّهُمَّ إِنِّي أَسْأَلُكَ الْهُدَى وَالتُّقَى وَالْعَفَافَ وَالْغِنَى",
+      "okunusu": "Allahümme inni es-elükel-hüda vet-tuqa vel-'afafe vel-ghina.",
+      "anlamı": "Allah'ım! Senden hidayet, takva, iffet ve gönül zenginliği istiyorum."
+    },
+    {
+      "arapca": "رَبِّ اشْرَحْ لِي صَدْرِي وَيَسِّرْ لِي أَمْرِي",
+      "okunusu": "Rabbişrah li sadri ve yessir li emri.",
+      "anlamı": "Rabbim! Göğsümü genişlet, işimi kolaylaştır."
+    },
+    {
+      "arapca": "اللَّهُمَّ اهْدِنِي وَسَدِّدْنِي",
+      "okunusu": "Allahümmehdini ve seddidni.",
+      "anlamı": "Allah'ım! Beni doğru yola ilet ve işlerimde başarıya ulaştır."
+    },
+  ];
+
+  static const List<Map<String, String>> zenginEsmalar = [
+    {"esma": "Er-Rahmân (الرَّحْمَنُ)", "anlam": "Dünyada inanan inanmayan bütün canlılara merhamet gösteren mutlak lütuf sahibi."},
+    {"esma": "Er-Rahîm (الرَّحِيمُ)", "anlam": "Ahirette sadece müminlere ebedi merhamet ve ihsanda bulunan."},
+    {"esma": "El-Melik (الْمَلِكُ)", "anlam": "Mülkün, evrenin ve bütün varlıkların tek ve mutlak sahibi."},
+    {"esma": "El-Kuddûs (الْقُدُّوسُ)", "anlam": "Bütün noksanlıklardan münezzeh, pek kutsal ve tertemiz olan."},
+    {"esma": "Es-Selâm (السَّلاَمُ)", "anlam": "Esenlik veren, yarattıklarını tehlikelerden selamete çıkaran."},
+    {"esma": "El-Mü'min (الْمُؤْمِنُ)", "anlam": "Gönüllere iman ve huzur veren, sığınanları emniyette kılan."},
+  ];
+
+  static Future<Map<String, dynamic>> getGununIcerikleri() async {
+    final gunHash = DateTime.now().year * 1000 + DateTime.now().dayOfYear();
+    try {
+      final res = await http.get(Uri.parse('https://api.alquran.cloud/v1/ayah/random/tr.yazir')).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['code'] == 200 && data['data'] != null) {
+          final text = data['data']['text'] ?? "";
+          final surahName = data['data']['surah']['name'] ?? "";
+          final ayahNum = data['data']['numberInSurah'] ?? 1;
+          if (text.isNotEmpty) {
+            final hItem = zenginHadisler[gunHash % zenginHadisler.length];
+            final dItem = zenginDualar[gunHash % zenginDualar.length];
+            final eItem = zenginEsmalar[gunHash % zenginEsmalar.length];
+
+            return {
+              "ayet": "$text ($surahName, $ayahNum)",
+              "hadis": "${hItem['hadis']} (${hItem['kaynak']})",
+              "dua": dItem,
+              "esma": "${eItem['esma']}\n${eItem['anlam']}",
+            };
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Online API fallback kullanıldı: $e");
+    }
+
+    var a = zenginAyetler[gunHash % zenginAyetler.length];
+    var h = zenginHadisler[gunHash % zenginHadisler.length];
+    var d = zenginDualar[gunHash % zenginDualar.length];
+    var e = zenginEsmalar[gunHash % zenginEsmalar.length];
+
+    return {
+      "ayet": "${a['ayet']} (${a['sure']})",
+      "hadis": "${h['hadis']} (${h['kaynak']})",
+      "dua": d,
+      "esma": "${e['esma']}\n${e['anlam']}",
+    };
+  }
+}
+
+extension DateTimeDayOfYear on DateTime {
+  int dayOfYear() {
+    final diff = difference(DateTime(year, 1, 1));
+    return diff.inDays + 1;
+  }
+}
 
 // ==================== ANA GİRİŞ NOKTASI ====================
 void main() async {
@@ -37,9 +424,7 @@ void main() async {
 
       await flutterLocalNotificationsPlugin.initialize(
         initializationSettings,
-        onDidReceiveNotificationResponse: (NotificationResponse response) {
-          debugPrint("📱 Bildirime tıklandı!");
-        },
+        onDidReceiveNotificationResponse: (NotificationResponse response) {},
       );
 
       final androidImplementation =
@@ -64,7 +449,7 @@ void main() async {
         await androidImplementation.createNotificationChannel(channel2);
       }
     } catch (e) {
-      debugPrint("❌ Başlangıç bildirim hatası: $e");
+      debugPrint("Başlangıç bildirim hatası: $e");
     }
   }
 
@@ -72,72 +457,343 @@ void main() async {
 }
 
 // ==================== MYAPP ====================
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  AppThemeMode _currentTheme = AppThemeMode.rose; // Varsayılan Pembe Açılış Teması
+  bool _isDarkMode = false;
+  double _fontScale = 1.0;
+  bool _isFirstLaunch = true;
+  bool _isLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ayarlariYukle();
+  }
+
+  Future<void> _ayarlariYukle() async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeStr = prefs.getString('app_theme_mode') ?? 'rose';
+    final dark = prefs.getBool('gece_modu') ?? false;
+    final scale = prefs.getDouble('font_scale_factor') ?? 1.0;
+    final firstLaunch = prefs.getBool('onboarding_completed') != true;
+
+    setState(() {
+      _currentTheme = AppThemeMode.values.firstWhere(
+        (e) => e.name == themeStr,
+        orElse: () => AppThemeMode.rose,
+      );
+      _isDarkMode = dark;
+      _fontScale = scale;
+      _isFirstLaunch = firstLaunch;
+      _isLoaded = true;
+    });
+  }
+
+  void _updateTheme(AppThemeMode mode, bool isDark) async {
+    setState(() {
+      _currentTheme = mode;
+      _isDarkMode = isDark;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_theme_mode', mode.name);
+    await prefs.setBool('gece_modu', isDark);
+  }
+
+  void _updateFontScale(double scale) async {
+    setState(() {
+      _fontScale = scale;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('font_scale_factor', scale);
+  }
+
+  void _completeOnboarding() async {
+    setState(() {
+      _isFirstLaunch = false;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_completed', true);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (!_isLoaded) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    final themeData = AppThemeData.getTheme(_currentTheme);
+    final primaryColor = themeData.primary;
+
     return MaterialApp(
       title: 'Ezan Vakti 🌸',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        brightness: _isDarkMode ? Brightness.dark : Brightness.light,
+        primaryColor: primaryColor,
+        scaffoldBackgroundColor: _isDarkMode
+            ? themeData.backgroundDark
+            : themeData.backgroundLight,
         fontFamily: 'Schyler',
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB5627A)),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: primaryColor,
+          brightness: _isDarkMode ? Brightness.dark : Brightness.light,
+          primary: primaryColor,
+          secondary: themeData.secondary,
+          surface: _isDarkMode ? themeData.cardDark : themeData.cardLight,
+        ),
+        chipTheme: ChipThemeData(
+          backgroundColor: _isDarkMode ? themeData.cardDark : themeData.cardLight,
+          selectedColor: primaryColor.withValues(alpha: 0.35),
+          secondarySelectedColor: primaryColor,
+          labelStyle: TextStyle(color: _isDarkMode ? themeData.textDark : themeData.primary),
+        ),
+        switchTheme: SwitchThemeData(
+          thumbColor: WidgetStateProperty.all(primaryColor),
+          trackColor: WidgetStateProperty.all(primaryColor.withValues(alpha: 0.3)),
+        ),
+        sliderTheme: SliderThemeData(
+          activeTrackColor: primaryColor,
+          thumbColor: primaryColor,
+          overlayColor: primaryColor.withValues(alpha: 0.2),
+        ),
         useMaterial3: true,
       ),
-      home: const SplashScreen(),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(_fontScale),
+          ),
+          child: child!,
+        );
+      },
+      home: _isFirstLaunch
+          ? OnboardingScreen(
+              themeData: themeData,
+              isDark: _isDarkMode,
+              onCompleted: _completeOnboarding,
+            )
+          : SplashScreen(
+              currentTheme: _currentTheme,
+              isDarkMode: _isDarkMode,
+              fontScale: _fontScale,
+              onThemeChanged: _updateTheme,
+              onFontScaleChanged: _updateFontScale,
+              onOpenOnboarding: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => OnboardingScreen(
+                      themeData: themeData,
+                      isDark: _isDarkMode,
+                      onCompleted: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
 
-// ==================== SPLASH SCREEN ====================
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+// ==================== ONBOARDING ====================
+class OnboardingScreen extends StatefulWidget {
+  final AppThemeData themeData;
+  final bool isDark;
+  final VoidCallback onCompleted;
+
+  const OnboardingScreen({
+    super.key,
+    required this.themeData,
+    required this.isDark,
+    required this.onCompleted,
+  });
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const EzanVaktiApp()),
-        );
-      }
-    });
-  }
+class _OnboardingScreenState extends State<OnboardingScreen> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  final List<Map<String, String>> _pages = [
+    {
+      "icon": "🕌",
+      "title": "Ezan Vakti'ne Hoş Geldiniz",
+      "subtitle": "81 İl ve Tüm İlçelerin Namaz Vakitleri",
+      "desc": "Tüm illerin ve ilçelerin ezan vakitlerini anlık takip edin.",
+    },
+    {
+      "icon": "🎨",
+      "title": "Zengin Renk Temaları",
+      "subtitle": "Tüm Uygulamayı Bürünen Canlı Renkler",
+      "desc": "Gül Pembe, Zümrüt, Safir, Obsidian, Kehribar, Yakut temaları.",
+    },
+    {
+      "icon": "🌳",
+      "title": "Büyüyen Zikir Ormanı",
+      "subtitle": "Her 33 Zikirde Büyüyen Ağaçlar",
+      "desc": "1000 zikre kadar adım adım büyüyen dev ağacınız ve kişiselleştirilebilir zikir hedefleri.",
+    },
+    {
+      "icon": "🕋",
+      "title": "Diyanet Kur'an & Çeşitli Kıble API",
+      "subtitle": "Çoklu Kıble Seçeneği & Diyanet Mushaf",
+      "desc": "Google, Al-Adhan veya Diyanet kıble seçenekleriyle yönünüzü bulun.",
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
+    final theme = widget.themeData;
+    final isDark = widget.isDark;
+
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFF5E6E8), Color(0xFFE8C4D0), Color(0xFFFDF8F5)],
+            colors: isDark ? theme.bgGradientDark : theme.bgGradientLight,
           ),
         ),
-        child: const Center(
+        child: SafeArea(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                "🌸 HOŞ GELDİNİZ 🌸",
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFB5627A),
-                  letterSpacing: 2,
+              Align(
+                alignment: Alignment.topRight,
+                child: TextButton(
+                  onPressed: widget.onCompleted,
+                  child: Text(
+                    "Geç 🌸",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? theme.textDark : theme.primary,
+                    ),
+                  ),
                 ),
-                textAlign: TextAlign.center,
               ),
-              SizedBox(height: 50),
-              CircularProgressIndicator(color: Color(0xFFB5627A)),
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  onPageChanged: (idx) {
+                    setState(() => _currentPage = idx);
+                  },
+                  itemCount: _pages.length,
+                  itemBuilder: (context, index) {
+                    final item = _pages[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            item["icon"]!,
+                            style: const TextStyle(fontSize: 64),
+                          ),
+                          const SizedBox(height: 32),
+                          Text(
+                            item["title"]!,
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? theme.textDark : theme.primary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            item["subtitle"]!,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white.withValues(alpha: 0.9) : Colors.black87,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            item["desc"]!,
+                            style: TextStyle(
+                              fontSize: 15,
+                              height: 1.5,
+                              color: isDark ? Colors.white70 : Colors.black54,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _pages.length,
+                  (i) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == i ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentPage == i
+                          ? theme.primary
+                          : (isDark ? Colors.white30 : Colors.black26),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (_currentPage < _pages.length - 1) {
+                        _pageController.nextPage(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      } else {
+                        widget.onCompleted();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(26),
+                      ),
+                    ),
+                    child: Text(
+                      _currentPage == _pages.length - 1
+                          ? "Başla 🌸"
+                          : "Devam Et ➔",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -182,34 +838,22 @@ Future<void> showNotification(
       platformChannelSpecifics,
     );
   } catch (e) {
-    debugPrint("❌ Bildirim hatası: $e");
+    debugPrint("Bildirim hatası: $e");
   }
 }
 
-// ==================== VAKİT BİLGİ ÇUBUĞU BİLDİRİMİ (SADECE VAKİTLER) ====================
 Future<void> updateVakitBilgiCubugu(
   Map<String, String> vakitler,
 ) async {
   if (kIsWeb) return;
 
   try {
-    const sira = ["Imsak", "Gunes", "Ogle", "Ikindi", "Aksam", "Yatsi"];
-    const gosterimAdi = {
-      "Imsak": "İmsak",
-      "Gunes": "Güneş",
-      "Ogle": "Öğle",
-      "Ikindi": "İkindi",
-      "Aksam": "Akşam",
-      "Yatsi": "Yatsı",
-    };
-
+    const sira = ["İmsak", "Güneş", "Öğle", "İkindi", "Akşam", "Yatsı"];
     List<String> vakitListesi = [];
 
     for (var v in sira) {
       if (vakitler[v] != null && vakitler[v] != "--:--") {
-        String isim = gosterimAdi[v] ?? v;
-        String saat = vakitler[v]!;
-        vakitListesi.add("$isim $saat");
+        vakitListesi.add("$v ${vakitler[v]}");
       }
     }
 
@@ -217,7 +861,7 @@ Future<void> updateVakitBilgiCubugu(
 
     final bigText = BigTextStyleInformation(
       vakitSatiri,
-      contentTitle: "", // BAŞLIK YOK
+      contentTitle: "",
       summaryText: "",
     );
 
@@ -239,12 +883,12 @@ Future<void> updateVakitBilgiCubugu(
 
     await flutterLocalNotificationsPlugin.show(
       999,
-      "", // BAŞLIK YOK - BOŞ GÖNDER
+      "",
       vakitSatiri,
       details,
     );
   } catch (e) {
-    debugPrint("❌ Vakit bilgi çubuğu hatası: $e");
+    debugPrint("Vakit bilgi çubuğu hatası: $e");
   }
 }
 
@@ -252,1175 +896,170 @@ Future<void> cancelNotification() async {
   try {
     await flutterLocalNotificationsPlugin.cancel(999);
   } catch (e) {
-    debugPrint("❌ Bildirim kapatma hatası: $e");
+    debugPrint("Bildirim kapatma hatası: $e");
   }
 }
 
-Future<void> cancelAllScheduledNotifications() async {
-  await flutterLocalNotificationsPlugin.cancelAll();
-}
+// ==================== SPLASH SCREEN ====================
+class SplashScreen extends StatefulWidget {
+  final AppThemeMode currentTheme;
+  final bool isDarkMode;
+  final double fontScale;
+  final Function(AppThemeMode, bool) onThemeChanged;
+  final Function(double) onFontScaleChanged;
+  final VoidCallback onOpenOnboarding;
 
-Future<void> schedulePrayerNotifications(Map<String, String> vakitler) async {
-  if (kIsWeb) return;
-
-  await cancelAllScheduledNotifications();
-
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-
-  final vakitList = [
-    {"ad": "Imsak", "zaman": vakitler["Imsak"] ?? vakitler["İmsak"] ?? "--:--"},
-    {"ad": "Gunes", "zaman": vakitler["Gunes"] ?? vakitler["Güneş"] ?? "--:--"},
-    {"ad": "Ogle", "zaman": vakitler["Ogle"] ?? vakitler["Öğle"] ?? "--:--"},
-    {
-      "ad": "Ikindi",
-      "zaman": vakitler["Ikindi"] ?? vakitler["İkindi"] ?? "--:--"
-    },
-    {"ad": "Aksam", "zaman": vakitler["Aksam"] ?? vakitler["Akşam"] ?? "--:--"},
-    {"ad": "Yatsi", "zaman": vakitler["Yatsi"] ?? vakitler["Yatsı"] ?? "--:--"},
-  ];
-
-  for (var vakit in vakitList) {
-    if (vakit["zaman"] == "--:--") continue;
-
-    try {
-      final zamanParcalari = vakit["zaman"]!.split(":");
-      final saat = int.parse(zamanParcalari[0]);
-      final dakika = int.parse(zamanParcalari[1]);
-
-      DateTime vakitZamani =
-          DateTime(today.year, today.month, today.day, saat, dakika);
-
-      if (vakitZamani.isBefore(now)) {
-        vakitZamani = vakitZamani.add(const Duration(days: 1));
-      }
-
-      await _scheduleSingleNotification(
-          vakitZamani, vakit["ad"]!, vakit["zaman"]!);
-    } catch (e) {
-      debugPrint("❌ Vakit zamanlama hatası (${vakit["ad"]}): $e");
-    }
-  }
-}
-
-Future<void> _scheduleSingleNotification(
-    DateTime time, String vakitAdi, String saatStr) async {
-  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-    'namaz_vakitleri',
-    'Namaz Vakitleri',
-    channelDescription: 'Namaz vakitleri hatırlatıcıları',
-    importance: Importance.high,
-    priority: Priority.high,
-    playSound: true,
-    enableVibration: true,
-  );
-
-  const NotificationDetails details = NotificationDetails(
-    android: androidDetails,
-  );
-
-  final tamZamanliIzinVar = await Permission.scheduleExactAlarm.isGranted;
-  final scheduleMode = tamZamanliIzinVar
-      ? AndroidScheduleMode.exactAllowWhileIdle
-      : AndroidScheduleMode.inexactAllowWhileIdle;
-
-  await flutterLocalNotificationsPlugin.zonedSchedule(
-    vakitAdi.hashCode,
-    "🕌 $vakitAdi Vakti Geldi 🌸",
-    "$vakitAdi ezanı okunuyor. ($saatStr)\nNamazınızı kılmayı unutmayın.",
-    tz.TZDateTime.from(time, tz.local),
-    details,
-    uiLocalNotificationDateInterpretation:
-        UILocalNotificationDateInterpretation.absoluteTime,
-    matchDateTimeComponents: DateTimeComponents.time,
-    androidScheduleMode: scheduleMode,
-  );
-}
-
-// ==================== EZAN VAKTİ APP ====================
-class EzanVaktiApp extends StatefulWidget {
-  const EzanVaktiApp({super.key});
+  const SplashScreen({
+    super.key,
+    required this.currentTheme,
+    required this.isDarkMode,
+    required this.fontScale,
+    required this.onThemeChanged,
+    required this.onFontScaleChanged,
+    required this.onOpenOnboarding,
+  });
 
   @override
-  State<EzanVaktiApp> createState() => _EzanVaktiAppState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _EzanVaktiAppState extends State<EzanVaktiApp> {
-  bool isDarkMode = false;
-  bool _bildirimIzniKaliciRed = false;
-  double _yaziBoyutuOlcegi = 1.0;
-
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _temaAyariYukle();
-    _izniKontrolEt();
-  }
-
-  Future<void> _izniKontrolEt() async {
-    if (!kIsWeb) {
-      final status = await Permission.notification.status;
-      if (status.isPermanentlyDenied) {
-        setState(() {
-          _bildirimIzniKaliciRed = true;
-        });
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => EzanVaktiApp(
+              currentTheme: widget.currentTheme,
+              isDarkMode: widget.isDarkMode,
+              fontScale: widget.fontScale,
+              onThemeChanged: widget.onThemeChanged,
+              onFontScaleChanged: widget.onFontScaleChanged,
+              onOpenOnboarding: widget.onOpenOnboarding,
+            ),
+          ),
+        );
       }
-    }
-  }
-
-  Future<void> _temaAyariYukle() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      isDarkMode = prefs.getBool('gece_modu') ?? false;
-      _yaziBoyutuOlcegi = prefs.getDouble('yazi_boyutu_olcegi') ?? 1.0;
     });
   }
 
-  Future<void> _yaziBoyutunuKaydet(double deger) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('yazi_boyutu_olcegi', deger);
-    setState(() => _yaziBoyutuOlcegi = deger);
-  }
-
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Ezan Vakti 🌸',
-      debugShowCheckedModeBanner: false,
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(_yaziBoyutuOlcegi),
-          ),
-          child: child!,
-        );
-      },
-      theme: ThemeData(
-        brightness: isDarkMode ? Brightness.dark : Brightness.light,
-        primaryColor:
-            isDarkMode ? const Color(0xFF2D1B2E) : const Color(0xFFF5E6E8),
-        scaffoldBackgroundColor:
-            isDarkMode ? const Color(0xFF1A1118) : const Color(0xFFFDF8F5),
-        fontFamily: 'Schyler',
-        appBarTheme: AppBarTheme(
-          backgroundColor:
-              isDarkMode ? const Color(0xFF2D1B2E) : const Color(0xFFFDF8F5),
-          foregroundColor:
-              isDarkMode ? const Color(0xFFF5B7B7) : const Color(0xFFB5627A),
-          elevation: 0,
-          centerTitle: true,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor:
-                isDarkMode ? const Color(0xFFF5B7B7) : const Color(0xFFE8C4D0),
-            foregroundColor:
-                isDarkMode ? const Color(0xFF2D1B2E) : const Color(0xFF4A2E3B),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
+    final theme = AppThemeData.getTheme(widget.currentTheme);
+    final isDark = widget.isDarkMode;
+
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark ? theme.bgGradientDark : theme.bgGradientLight,
           ),
         ),
-        iconTheme: IconThemeData(
-          color: isDarkMode ? const Color(0xFFF5B7B7) : const Color(0xFFB5627A),
-        ),
-        cardTheme: CardThemeData(
-          color: isDarkMode
-              ? const Color(0xFF2D1B2E)
-              : Colors.white.withValues(alpha: 0.85),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                "🌸 HOŞ GELDİNİZ 🌸",
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? theme.textDark : theme.primary,
+                  letterSpacing: 2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 40),
+              CircularProgressIndicator(color: theme.primary),
+            ],
           ),
-          elevation: 4,
-          shadowColor: isDarkMode
-              ? Colors.black54
-              : const Color(0xFFE8C4D0).withValues(alpha: 0.3),
         ),
-      ),
-      home: AnaSayfaGezgini(
-        isDarkMode: isDarkMode,
-        onThemeChanged: (val) async {
-          setState(() => isDarkMode = val);
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('gece_modu', val);
-        },
-        bildirimIzniKaliciRed: _bildirimIzniKaliciRed,
-        yaziBoyutuOlcegi: _yaziBoyutuOlcegi,
-        onYaziBoyutuChanged: _yaziBoyutunuKaydet,
       ),
     );
   }
 }
 
-// ==================== ARKA PLAN (PAPATYALI) ====================
-class FlowerBackground extends StatelessWidget {
+// ==================== iOS GLASS CARD WIDGET ====================
+class IosGlassCard extends StatelessWidget {
   final Widget child;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
+  final BorderRadius? borderRadius;
   final bool isDark;
+  final AppThemeData themeData;
+  final VoidCallback? onTap;
 
-  const FlowerBackground({
+  const IosGlassCard({
     super.key,
     required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.margin = const EdgeInsets.only(bottom: 12),
+    this.borderRadius,
     required this.isDark,
+    required this.themeData,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final br = borderRadius ?? BorderRadius.circular(24);
+    final cardGrad = isDark ? themeData.cardGradientDark : themeData.cardGradientLight;
+
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF1A1118),
-                  const Color(0xFF2D1B2E),
-                  const Color(0xFF3D1F3A),
-                ]
-              : [
-                  const Color(0xFFFDF8F5),
-                  const Color(0xFFFDF0F2),
-                  const Color(0xFFFFF5E6),
+      margin: margin,
+      child: ClipRRect(
+        borderRadius: br,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: InkWell(
+            onTap: onTap != null
+                ? () {
+                    HapticFeedback.lightImpact();
+                    onTap!();
+                  }
+                : null,
+            borderRadius: br,
+            child: Container(
+              padding: padding,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: cardGrad,
+                ),
+                borderRadius: br,
+                border: Border.all(
+                  color: isDark
+                      ? themeData.primary.withValues(alpha: 0.50)
+                      : themeData.primary.withValues(alpha: 0.35),
+                  width: 1.4,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.7)
+                        : themeData.primary.withValues(alpha: 0.15),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  )
                 ],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: Opacity(
-              opacity: isDark ? 0.06 : 0.12,
-              child: Image.asset(
-                'assets/images/papatya.png',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container();
-                },
               ),
+              child: child,
             ),
           ),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-// ==================== ALT BİLGİ (FOOTER) ====================
-class AltBilgiMetni extends StatelessWidget {
-  final bool isDark;
-  const AltBilgiMetni({super.key, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      child: Text(
-        "🌸 Bu uygulamayı annem 🪷 için tasarladım. 🌸",
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: isDark ? Colors.white38 : Colors.black45,
         ),
-        textAlign: TextAlign.center,
       ),
     );
   }
 }
 
-class OzelGunler {
-  static final List<Map<String, dynamic>> _ozelGunler = [
-    {
-      'ad': '🌸 Öğretmenler Günü',
-      'tarih': '2026-11-24',
-      'aciklama':
-          'Başöğretmen Mustafa Kemal Atatürk\'e ve tüm öğretmenlere saygı ve şükran günü.',
-      'bildirim': true,
-    },
-    {
-      'ad': '🌷 Anneler Günü',
-      'tarih': '2026-05-11',
-      'aciklama':
-          'Annelerimize sevgi, saygı ve şükran duygularımızı ifade ettiğimiz özel gün.',
-      'bildirim': true,
-    },
-    {
-      'ad': '🍒 Malatyalılar Günü',
-      'tarih': '2026-05-15',
-      'aciklama':
-          'Malatya\'nın düşman işgalinden kurtuluşu, gurur ve dayanışma günü.',
-      'bildirim': true,
-    },
-    {
-      'ad': '👩‍💻 Kadın Yazılımcılar Günü',
-      'tarih': '2026-10-13',
-      'aciklama':
-          'Kadın yazılımcıların teknoloji dünyasındaki başarılarını kutladığımız özel gün.',
-      'bildirim': true,
-    },
-    {
-      'ad': '🎓 Akademisyenler Günü',
-      'tarih': '2026-05-19',
-      'aciklama':
-          'Gençlik ve Spor Bayramı, Atatürk\'ü Anma, tüm akademisyenlerin günü.',
-      'bildirim': true,
-    },
-    {
-      'ad': '💪 Fizyoterapistler Günü',
-      'tarih': '2026-09-08',
-      'aciklama':
-          'Fizyoterapistlerin sağlık alanındaki önemli katkılarının kutlandığı gün.',
-      'bildirim': true,
-    },
-  ];
-
-  static final List<Map<String, dynamic>> _diniGunlerHicri = [
-    {
-      'ad': '🕌 Regaib Kandili',
-      'hicriGun': -1,
-      'hicriAy': 7,
-      'aciklama': 'Üç ayların başlangıcı, rahmet ve bereket gecesi.'
-    },
-    {
-      'ad': '🕌 Miraç Kandili',
-      'hicriGun': 27,
-      'hicriAy': 7,
-      'aciklama': 'Hz. Muhammed (s.a.v.)\'in göğe yükseldiği gece.'
-    },
-    {
-      'ad': '🕌 Berat Kandili',
-      'hicriGun': 15,
-      'hicriAy': 8,
-      'aciklama': 'Günahların affedildiği, rahmet kapılarının açıldığı gece.'
-    },
-    {
-      'ad': '🕌 Ramazan Başlangıcı',
-      'hicriGun': 1,
-      'hicriAy': 9,
-      'aciklama': 'Oruç ibadetinin başladığı mübarek ay.'
-    },
-    {
-      'ad': '🕌 Kadir Gecesi',
-      'hicriGun': 27,
-      'hicriAy': 9,
-      'aciklama': 'Kur\'an\'ın indirildiği, bin aydan hayırlı gece.'
-    },
-    {
-      'ad': '🕌 Ramazan Bayramı',
-      'hicriGun': 1,
-      'hicriAy': 10,
-      'aciklama':
-          'Ramazan ayının sonunda oruç ibadetinin tamamlandığı, şükür ve kardeşlik bayramı.'
-    },
-    {
-      'ad': '🕌 Kurban Bayramı',
-      'hicriGun': 10,
-      'hicriAy': 12,
-      'aciklama': 'Hac ibadetinin sembolü, fedakarlık ve paylaşma bayramı.'
-    },
-    {
-      'ad': '🕌 Hicri Yılbaşı',
-      'hicriGun': 1,
-      'hicriAy': 1,
-      'aciklama': 'Hicri takvimin başlangıcı, yeni bir yıl.'
-    },
-    {
-      'ad': '🕌 Aşure Günü',
-      'hicriGun': 10,
-      'hicriAy': 1,
-      'aciklama': 'Birçok önemli olayın yaşandığı, paylaşma ve bereket günü.'
-    },
-    {
-      'ad': '🕌 Mevlid Kandili',
-      'hicriGun': 12,
-      'hicriAy': 3,
-      'aciklama': 'Hz. Muhammed (s.a.v.)\'in doğduğu mübarek gece.'
-    },
-  ];
-
-  static List<Map<String, dynamic>>? _diniGunlerCache;
-
-  static Future<void> diniGunleriHazirla() async {
-    if (kIsWeb) return;
-    final prefs = await SharedPreferences.getInstance();
-    try {
-      final bugun = DateFormat('dd-MM-yyyy').format(DateTime.now());
-      final gToHYanit = await http
-          .get(Uri.parse('https://api.aladhan.com/v1/gToH/$bugun'))
-          .timeout(const Duration(seconds: 10));
-      final hicriYilBugun =
-          int.parse(jsonDecode(gToHYanit.body)['data']['hijri']['year']);
-
-      final cacheliYil = prefs.getInt('dini_gun_cache_hicri_yil');
-      final cacheliJson = prefs.getString('dini_gun_cache_json');
-      if (cacheliYil == hicriYilBugun && cacheliJson != null) {
-        _diniGunlerCache =
-            (jsonDecode(cacheliJson) as List).cast<Map<String, dynamic>>();
-        return;
-      }
-
-      final List<Map<String, dynamic>> hesaplanan = [];
-      final simdi = DateTime.now();
-      final bugunYalin = DateTime(simdi.year, simdi.month, simdi.day);
-
-      for (var gun in _diniGunlerHicri) {
-        try {
-          DateTime? secilenTarih;
-          for (final yil in [hicriYilBugun, hicriYilBugun + 1]) {
-            DateTime? aday;
-            if (gun['hicriGun'] == -1) {
-              final birRecep = await _hToGCevir(1, gun['hicriAy'], yil);
-              if (birRecep != null) {
-                aday = birRecep;
-                while (aday!.weekday != DateTime.friday) {
-                  aday = aday.add(const Duration(days: 1));
-                }
-              }
-            } else {
-              aday = await _hToGCevir(gun['hicriGun'], gun['hicriAy'], yil);
-            }
-            if (aday != null &&
-                !aday.isBefore(bugunYalin) &&
-                (secilenTarih == null || aday.isBefore(secilenTarih))) {
-              secilenTarih = aday;
-            }
-          }
-          if (secilenTarih != null) {
-            hesaplanan.add({
-              'ad': gun['ad'],
-              'tarih': DateFormat('yyyy-MM-dd').format(secilenTarih),
-              'aciklama': gun['aciklama'],
-              'bildirim': false,
-            });
-          }
-        } catch (e) {
-          debugPrint("❌ ${gun['ad']} hesaplanamadı: $e");
-        }
-      }
-
-      _diniGunlerCache = hesaplanan;
-      await prefs.setInt('dini_gun_cache_hicri_yil', hicriYilBugun);
-      await prefs.setString('dini_gun_cache_json', jsonEncode(hesaplanan));
-      debugPrint(
-          "✅ Dini günler Hicri ${hicriYilBugun}/${hicriYilBugun + 1} için hesaplandı");
-    } catch (e) {
-      debugPrint("❌ Dini günler hazırlanamadı (internet yok olabilir): $e");
-      final cacheliJson = prefs.getString('dini_gun_cache_json');
-      if (cacheliJson != null) {
-        _diniGunlerCache =
-            (jsonDecode(cacheliJson) as List).cast<Map<String, dynamic>>();
-      } else {
-        _diniGunlerCache = [];
-      }
-    }
-  }
-
-  static Future<DateTime?> _hToGCevir(int gun, int ay, int yil) async {
-    final hicriTarih =
-        '${gun.toString().padLeft(2, '0')}-${ay.toString().padLeft(2, '0')}-$yil';
-    final yanit = await http
-        .get(Uri.parse('https://api.aladhan.com/v1/hToG/$hicriTarih'))
-        .timeout(const Duration(seconds: 10));
-    if (yanit.statusCode != 200) return null;
-    final g = jsonDecode(yanit.body)['data']['gregorian'];
-    return DateTime(
-      int.parse(g['year']),
-      int.parse(g['month']['number'].toString()),
-      int.parse(g['day']),
-    );
-  }
-
-  static List<Map<String, dynamic>> get _diniGunler => _diniGunlerCache ?? [];
-
-  static final List<Map<String, dynamic>> _milliGunler = [
-    {
-      'ad': '🇹🇷 İstiklal Marşı\'nın Kabulü ve Mehmet Akif Ersoy\'u Anma Günü',
-      'tarih': '2026-03-12',
-      'aciklama':
-          'İstiklal Marşı\'nın TBMM tarafından kabul edildiği gün ve şairi Mehmet Akif Ersoy\'u anma günü.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Çanakkale Zaferi ve Şehitleri Anma Günü',
-      'tarih': '2026-03-18',
-      'aciklama':
-          'Çanakkale deniz zaferi ve bu uğurda şehit düşenleri anma günü.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Ulusal Egemenlik ve Çocuk Bayramı',
-      'tarih': '2026-04-23',
-      'aciklama':
-          'Türkiye Büyük Millet Meclisi\'nin açılışı ve çocuklara armağan edilen bayram.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Emek ve Dayanışma Günü',
-      'tarih': '2026-05-01',
-      'aciklama': 'İşçi hakları ve emeğin değerine dikkat çekilen gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Atatürk\'ü Anma ve Gençlik ve Spor Bayramı',
-      'tarih': '2026-05-19',
-      'aciklama':
-          'Mustafa Kemal Atatürk\'ün Samsun\'a çıkışı ve gençliğe armağanı.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Demokrasi ve Milli Birlik Günü',
-      'tarih': '2026-07-15',
-      'aciklama':
-          '15 Temmuz darbe girişimine karşı milletin demokrasi ve bağımsızlık mücadelesi.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Zafer Bayramı',
-      'tarih': '2026-08-30',
-      'aciklama':
-          'Büyük Taarruz\'un zaferle sonuçlanması, Türk ordusunun kahramanlığı.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Gaziler Günü',
-      'tarih': '2026-09-19',
-      'aciklama': 'Gazilerimizi minnet ve şükranla anıyoruz.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Cumhuriyet Bayramı',
-      'tarih': '2026-10-29',
-      'aciklama':
-          'Türkiye Cumhuriyeti\'nin ilanı, bağımsızlık ve çağdaşlaşma bayramı.',
-      'bildirim': false
-    },
-    {
-      'ad': '🇹🇷 Atatürk\'ü Anma Günü',
-      'tarih': '2026-11-10',
-      'aciklama':
-          'Büyük Önder Mustafa Kemal Atatürk\'ü vefatının yıldönümünde saygıyla anma günü.',
-      'bildirim': false
-    },
-  ];
-
-  static final List<Map<String, dynamic>> _digerOzelGunler = [
-    {
-      'ad': '🌍 Dünya Kadınlar Günü',
-      'tarih': '2026-03-08',
-      'aciklama': 'Kadın hakları ve eşitlik mücadelesinin simgesi.',
-      'bildirim': false
-    },
-    {
-      'ad': '🌳 Dünya Orman Günü',
-      'tarih': '2026-03-21',
-      'aciklama': 'Ormanların önemine dikkat çeken uluslararası gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '💧 Dünya Su Günü',
-      'tarih': '2026-03-22',
-      'aciklama': 'Temiz suya erişimin önemine dikkat çekilen gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '🩺 Dünya Sağlık Günü',
-      'tarih': '2026-04-07',
-      'aciklama': 'Halk sağlığının önemine dikkat çekilen gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '📚 Dünya Kitap Günü',
-      'tarih': '2026-04-23',
-      'aciklama':
-          'Kitap okumanın ve telif haklarının önemine dikkat çeken gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '🌏 Dünya Çevre Günü',
-      'tarih': '2026-06-05',
-      'aciklama': 'Çevre bilincini artırmak için kutlanan uluslararası gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '👨‍👩‍👧 Dünya Nüfus Günü',
-      'tarih': '2026-07-11',
-      'aciklama': 'Nüfus meselelerine dikkat çeken uluslararası gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '🕊️ Dünya Barış Günü',
-      'tarih': '2026-09-21',
-      'aciklama': 'Dünya barışı için umut ve birlik mesajı.',
-      'bildirim': false
-    },
-    {
-      'ad': '👴 Dünya Yaşlılar Günü',
-      'tarih': '2026-10-01',
-      'aciklama': 'Yaşlı bireylere saygı ve destek günü.',
-      'bildirim': false
-    },
-    {
-      'ad': '👩‍🏫 Dünya Öğretmenler Günü',
-      'tarih': '2026-10-05',
-      'aciklama':
-          'UNESCO tarafından ilan edilen, öğretmenlerin katkılarını kutlayan gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '🍎 Dünya Gıda Günü',
-      'tarih': '2026-10-16',
-      'aciklama': 'Açlıkla mücadele ve gıda güvenliğine dikkat çeken gün.',
-      'bildirim': false
-    },
-    {
-      'ad': '💪 Dünya Engelliler Günü',
-      'tarih': '2026-12-03',
-      'aciklama':
-          'Engelli bireylerin haklarına dikkat çekmek için birleşiyoruz.',
-      'bildirim': false
-    },
-    {
-      'ad': '🌍 Dünya Çocuk Hakları Günü',
-      'tarih': '2026-11-20',
-      'aciklama':
-          'Çocuk haklarının korunması ve geliştirilmesi için farkındalık günü.',
-      'bildirim': false
-    },
-    {
-      'ad': '🕯️ İnsan Hakları Günü',
-      'tarih': '2026-12-10',
-      'aciklama': 'İnsan haklarının evrenselliğine vurgu yapıyoruz.',
-      'bildirim': false
-    },
-  ];
-
-  static List<Map<String, dynamic>> get _tumGunler {
-    final List<Map<String, dynamic>> all = [];
-    all.addAll(_ozelGunler);
-    all.addAll(_diniGunler);
-    all.addAll(_milliGunler);
-    all.addAll(_digerOzelGunler);
-    return all;
-  }
-
-  static Map<String, dynamic>? getYaklasanOzelGun() {
-    DateTime simdi = DateTime.now();
-    DateTime bugunYalin = DateTime(simdi.year, simdi.month, simdi.day);
-    int currentYear = simdi.year;
-
-    List<Map<String, dynamic>> tumGunler = [];
-
-    for (var gun in _tumGunler) {
-      String tarih = gun['tarih'];
-      List<String> parts = tarih.split('-');
-
-      DateTime hedefTarih =
-          DateTime(currentYear, int.parse(parts[1]), int.parse(parts[2]));
-
-      if (hedefTarih.isBefore(bugunYalin)) {
-        hedefTarih =
-            DateTime(currentYear + 1, int.parse(parts[1]), int.parse(parts[2]));
-      }
-
-      tumGunler.add({
-        'ad': gun['ad'],
-        'tarih': DateFormat('yyyy-MM-dd').format(hedefTarih),
-        'aciklama': gun['aciklama'],
-        'bildirim': gun['bildirim'] ?? false,
-      });
-    }
-
-    tumGunler.sort(
-      (a, b) =>
-          DateTime.parse(a['tarih']).compareTo(DateTime.parse(b['tarih'])),
-    );
-
-    for (var gun in tumGunler) {
-      DateTime gunTarih = DateTime.parse(gun['tarih']);
-      int kalanGun = (gunTarih.difference(bugunYalin).inHours / 24).round();
-
-      if (kalanGun == 0) {
-        return {
-          'ad': gun['ad'],
-          'kalanGun': 0,
-          'kalanGunText': '🌸 BUGÜN 🌸',
-          'aciklama': gun['aciklama'],
-          'tarih': gun['tarih'],
-          'bildirim': gun['bildirim'] ?? false,
-        };
-      } else if (kalanGun > 0) {
-        return {
-          'ad': gun['ad'],
-          'kalanGun': kalanGun,
-          'kalanGunText': '$kalanGun gün sonra 🌷',
-          'aciklama': gun['aciklama'],
-          'tarih': gun['tarih'],
-          'bildirim': gun['bildirim'] ?? false,
-        };
-      }
-    }
-    return null;
-  }
-
-  static String? bugunOzelGunVarMi() {
-    DateTime now = DateTime.now();
-    String bugunAyGun = DateFormat('MM-dd').format(now);
-
-    List<Map<String, dynamic>> bildirimGunleri = [];
-    bildirimGunleri.addAll(_ozelGunler);
-
-    for (var gun in bildirimGunleri) {
-      String tarih = gun['tarih'];
-      List<String> parts = tarih.split('-');
-      String kontrolAyGun = '${parts[1]}-${parts[2]}';
-
-      if (kontrolAyGun == bugunAyGun) {
-        return gun['ad'];
-      }
-    }
-    return null;
-  }
-
-  static List<Map<String, dynamic>> getTumOzelGunler() {
-    return _tumGunler;
-  }
-}
-
-// ==================== GÜNLÜK İÇERİK SERVİSİ ====================
-class GunlukIcerikServisi {
-  static int _getYilinGunu() {
-    return int.parse(DateFormat("D").format(DateTime.now()));
-  }
-
-  static const List<List<int>> gununAyetiReferanslari = [
-    [2, 153],
-    [94, 5],
-    [14, 7],
-    [11, 56],
-    [39, 36],
-    [18, 10],
-    [16, 90],
-    [99, 7],
-    [99, 8],
-    [112, 1],
-  ];
-
-  static const List<String> ayetlerYedek = [
-    "Allah sabredenlerle beraberdir. (Bakara, 153)",
-    "Şüphesiz güçlükle beraber bir kolaylık vardır. (İnşirah, 5)",
-    "Eğer şükrederseniz, elbette size nimetimi artırırım. (İbrahim, 7)",
-    "Ben Rabbime tevekkül ettim. (Hud, 56)",
-    "Allah kuluna kâfi değil midir? (Zümer, 36)",
-    "Rabbimiz! Bize katından bir rahmet ver. (Kehf, 10)",
-    "Allah, adaleti, iyiliği ve akrabaya yardımı emreder. (Nahl, 90)",
-    "Kim zerre kadar iyilik yaparsa onu görür. (Zilzal, 7)",
-    "Kim zerre kadar kötülük yaparsa onu görür. (Zilzal, 8)",
-    "De ki: 'O Allah birdir.' (İhlas, 1)",
-  ];
-
-  static const int _nawawiHadisSayisi = 42;
-
-  static Future<String> gununHadisiGetir() async {
-    final yilinGunu = _getYilinGunu();
-    final hadisNo = (yilinGunu % _nawawiHadisSayisi) + 1;
-    final prefs = await SharedPreferences.getInstance();
-    final cacheKey = 'gunun_hadisi_$yilinGunu';
-
-    final cached = prefs.getString(cacheKey);
-    if (cached != null) return cached;
-
-    try {
-      final uri = Uri.parse(
-        'https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/tur-nawawi/$hadisNo.json',
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final hadisler = data['hadiths'] as List;
-        if (hadisler.isNotEmpty) {
-          final metin = (hadisler[0]['text'] as String).trim();
-          final sonuc = "$metin\n(Nevevi'nin Kırk Hadis'i, Hadis $hadisNo)";
-          await prefs.setString(cacheKey, sonuc);
-          return sonuc;
-        }
-      }
-    } catch (_) {}
-    return hadisler[yilinGunu % hadisler.length];
-  }
-
-  static const List<List<int>> gununDuasiReferanslari = [
-    [2, 201],
-    [2, 286],
-    [3, 8],
-    [3, 147],
-    [3, 193],
-    [7, 23],
-    [14, 40],
-    [14, 41],
-    [20, 25],
-    [21, 87],
-    [21, 89],
-    [23, 118],
-    [25, 74],
-    [28, 24],
-    [59, 10],
-  ];
-
-  static const List<String> dualarYedek = [
-    "Rabbenâ âtinâ fid-dünyâ haseneten ve fi'l-âhirati haseneten ve kınâ azâben-nâr. (Bakara, 201)",
-    "Rabbenâ lâ tuâhiznâ in nesînâ ev ahta'nâ. (Bakara, 286)",
-    "Rabbenâğfirlî ve li vâlideyye. (İbrahim, 41)",
-    "Rabbi zidnî ilmâ. (Tâhâ, 114)",
-    "Hasbunallâhu ve ni'mel vekîl. (Âl-i İmrân, 173)",
-    "Rabbi'şrahlî sadrî ve yessirlî emrî. (Tâhâ, 25-26)",
-    "Rabbenâ heb lenâ min ezvâcinâ ve zurriyyâtinâ kurrete a'yun. (Furkan, 74)",
-  ];
-
-  static const List<String> hadisler = [
-    "Namaz, dinin direğidir. (Tirmizî)",
-    "Kolaylaştırınız, zorlaştırmayınız; müjdeleyiniz, nefret ettirmeyiniz. (Buhârî)",
-    "Ameller niyetlere göredir. (Buhârî)",
-    "Müslüman, Müslümanın kardeşidir. (Müslim)",
-    "Sizin en hayırlınız, ahlakı en güzel olanınızdır. (Buhârî)",
-    "Veren el, alan elden hayırlıdır. (Buhârî, Müslim)",
-    "Sizden biriniz, kendisi için istediği kardeşi için de istemedikçe gerçek anlamda iman etmiş olmaz. (Buhârî, Müslim)",
-    "Gülümseyen bile senin için bir sadakadır. (Tirmizî)",
-    "Allah güzeldir, güzelliği sever. (Müslim)",
-    "İyilik, güzel ahlaktır. (Müslim)",
-  ];
-
-  static const List<String> dualar = [
-    "Rabbim! Bana ve aileme hayırlı evlat ver.",
-    "Allah'ım! Kalbimi dinin üzere sabit kıl.",
-    "Rabbenâ âtinâ fid-dünyâ haseneten ve fi'l-âhirati haseneten ve kınâ azâben-nâr. (Bakara, 201)",
-    "Rabbi zidnî ilma. (Tâhâ, 114)",
-    "Allah'ım! Beni senden uzaklaştıracak her şeyden koru.",
-    "Rabbenâğfirli ve li vâlideyye. (İbrahim, 41)",
-    "Hasbunallâhu ve ni'mel vekîl. (Âl-i İmrân, 173)",
-  ];
-
-  static const List<String> esmalar = [
-    "Er-Rahmân (Dünyada her canlıya merhamet eden)",
-    "Er-Rahîm (Ahirette sadece müminlere merhamet eden)",
-    "El-Melik (Mülkün, evrenin mutlak sahibi)",
-    "El-Kuddûs (Her türlü eksiklikten uzak olan)",
-    "Es-Selâm (Kullarını selamete çıkaran)",
-  ];
-
-  static Future<String> gununDuasiGetir() async {
-    final yilinGunu = _getYilinGunu();
-    final ref =
-        gununDuasiReferanslari[yilinGunu % gununDuasiReferanslari.length];
-    final prefs = await SharedPreferences.getInstance();
-    final cacheKey = 'gunun_duasi_$yilinGunu';
-
-    final cached = prefs.getString(cacheKey);
-    if (cached != null) return cached;
-
-    try {
-      final uri = Uri.parse(
-        'https://api.alquran.cloud/v1/ayah/${ref[0]}:${ref[1]}/editions/quran-uthmani,tr.diyanet',
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body)['data'] as List;
-        final arapca = data[0]['text'] as String;
-        final meal = data[1]['text'] as String;
-        final sonuc = "$arapca\n\"$meal\" (${_sureAdi(ref[0])}, ${ref[1]})";
-        await prefs.setString(cacheKey, sonuc);
-        return sonuc;
-      }
-    } catch (_) {}
-    return dualarYedek[yilinGunu % dualarYedek.length];
-  }
-
-  static Future<String> gununAyetiGetir() async {
-    final yilinGunu = _getYilinGunu();
-    final ref =
-        gununAyetiReferanslari[yilinGunu % gununAyetiReferanslari.length];
-    final prefs = await SharedPreferences.getInstance();
-    final cacheKey = 'gunun_ayeti_$yilinGunu';
-
-    final cached = prefs.getString(cacheKey);
-    if (cached != null) return cached;
-
-    try {
-      final uri = Uri.parse(
-        'https://api.alquran.cloud/v1/ayah/${ref[0]}:${ref[1]}/editions/quran-uthmani,tr.diyanet',
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body)['data'] as List;
-        final arapca = data[0]['text'] as String;
-        final meal = data[1]['text'] as String;
-        final sonuc = "$arapca\n\"$meal\" (${_sureAdi(ref[0])}, ${ref[1]})";
-        await prefs.setString(cacheKey, sonuc);
-        return sonuc;
-      }
-    } catch (_) {}
-    return ayetlerYedek[yilinGunu % ayetlerYedek.length];
-  }
-
-  static String _sureAdi(int sureNo) {
-    if (sureNo >= 1 && sureNo <= 114) {
-      return KuranApiServisi.resmiSureIsimleri[sureNo - 1];
-    }
-    return "Sure $sureNo";
-  }
-
-  static Map<String, String> getBugununIcerikleri() {
-    int yilinGunu = _getYilinGunu();
-    return {
-      "ayet": ayetlerYedek[yilinGunu % ayetlerYedek.length],
-      "hadis": hadisler[yilinGunu % hadisler.length],
-      "dua": dualar[yilinGunu % dualar.length],
-      "esma": esmalar[yilinGunu % esmalar.length],
-    };
-  }
-}
-
-// ==================== SURELER ====================
-class Sureci {
-  final String name;
-  final String arabic;
-  final String reading;
-  final String meaning;
-  final int number;
-  Sureci({
-    required this.name,
-    required this.arabic,
-    required this.reading,
-    required this.meaning,
-    required this.number,
-  });
-}
-
-// ==================== KUR'AN API SERVİSİ ====================
-class KuranApiServisi {
-  static const String _cacheKey = 'kuran_tum_sureler_v1';
-  static const String _cacheTarihKey = 'kuran_cache_tarih';
-  static const String _apiUrl =
-      'https://api.alquran.cloud/v1/quran/editions/quran-uthmani,en.transliteration,tr.diyanet';
-
-  static const List<String> resmiSureIsimleri = [
-    "Fatiha",
-    "Bakara",
-    "Âl-i İmrân",
-    "Nisâ",
-    "Mâide",
-    "En'âm",
-    "A'râf",
-    "Enfâl",
-    "Tevbe",
-    "Yûnus",
-    "Hûd",
-    "Yûsuf",
-    "Ra'd",
-    "İbrâhîm",
-    "Hicr",
-    "Nahl",
-    "İsrâ",
-    "Kehf",
-    "Meryem",
-    "Tâhâ",
-    "Enbiyâ",
-    "Hac",
-    "Mü'minûn",
-    "Nûr",
-    "Furkân",
-    "Şu'arâ",
-    "Neml",
-    "Kasas",
-    "Ankebût",
-    "Rûm",
-    "Lokmân",
-    "Secde",
-    "Ahzâb",
-    "Sebe'",
-    "Fâtır",
-    "Yâsîn",
-    "Sâffât",
-    "Sâd",
-    "Zümer",
-    "Mü'min",
-    "Fussilet",
-    "Şûrâ",
-    "Zuhruf",
-    "Duhân",
-    "Câsiye",
-    "Ahkâf",
-    "Muhammed",
-    "Fetih",
-    "Hucurât",
-    "Kâf",
-    "Zâriyât",
-    "Tûr",
-    "Necm",
-    "Kamer",
-    "Rahmân",
-    "Vâkıa",
-    "Hadîd",
-    "Mücâdele",
-    "Haşr",
-    "Mümtehine",
-    "Saf",
-    "Cuma",
-    "Münâfikûn",
-    "Teğâbün",
-    "Talâk",
-    "Tahrîm",
-    "Mülk",
-    "Kalem",
-    "Hâkka",
-    "Meâric",
-    "Nûh",
-    "Cin",
-    "Müzzemmil",
-    "Müddessir",
-    "Kıyâme",
-    "İnsân",
-    "Mürselât",
-    "Nebe",
-    "Nâziât",
-    "Abese",
-    "Tekvîr",
-    "İnfitâr",
-    "Mutaffifîn",
-    "İnşikâk",
-    "Burûc",
-    "Târık",
-    "A'lâ",
-    "Gâşiye",
-    "Fecr",
-    "Beled",
-    "Şems",
-    "Leyl",
-    "Duhâ",
-    "İnşirâh",
-    "Tîn",
-    "Alak",
-    "Kadr",
-    "Beyyine",
-    "Zilzâl",
-    "Âdiyât",
-    "Kâria",
-    "Tekâsür",
-    "Asr",
-    "Hümeze",
-    "Fîl",
-    "Kureyş",
-    "Mâûn",
-    "Kevser",
-    "Kâfirûn",
-    "Nasr",
-    "Tebbet",
-    "İhlâs",
-    "Felak",
-    "Nâs"
-  ];
-
-  static Future<List<Sureci>> tumSureleriGetir({
-    bool zorlaYenile = false,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (!zorlaYenile) {
-      final cached = prefs.getString(_cacheKey);
-      if (cached != null) {
-        try {
-          return _cozumle(cached);
-        } catch (_) {}
-      }
-    }
-
-    final response =
-        await http.get(Uri.parse(_apiUrl)).timeout(const Duration(seconds: 30));
-
-    if (response.statusCode != 200) {
-      throw Exception("Kur'an verisi alınamadı (kod: ${response.statusCode})");
-    }
-
-    final sureler = _apiYanitindanUret(response.body);
-
-    await prefs.setString(
-      _cacheKey,
-      jsonEncode(
-        sureler
-            .map(
-              (s) => {
-                'n': s.number,
-                'ad': s.name,
-                'ar': s.arabic,
-                'ok': s.reading,
-                'me': s.meaning,
-              },
-            )
-            .toList(),
-      ),
-    );
-    await prefs.setString(_cacheTarihKey, DateTime.now().toIso8601String());
-
-    return sureler;
-  }
-
-  static List<Sureci> _apiYanitindanUret(String body) {
-    final data = jsonDecode(body);
-    final editions = data['data'] as List;
-
-    final arapca = editions[0]['surahs'] as List;
-    final okunus = editions[1]['surahs'] as List;
-    final meal = editions[2]['surahs'] as List;
-
-    List<Sureci> sureler = [];
-    for (int i = 0; i < arapca.length; i++) {
-      final arAyetler = arapca[i]['ayahs'] as List;
-      final okAyetler = okunus[i]['ayahs'] as List;
-      final meAyetler = meal[i]['ayahs'] as List;
-
-      final arabicMetin = arAyetler
-          .map((a) => "${a['text']} ﴿${a['numberInSurah']}﴾")
-          .join(' ');
-      final okunusMetni = okAyetler
-          .map((a) => "${a['numberInSurah']}. ${a['text']}")
-          .join('  ');
-      final mealMetni = meAyetler
-          .map((a) => "${a['numberInSurah']}. ${a['text']}")
-          .join('  ');
-
-      final sureNo = arapca[i]['number'] as int;
-      sureler.add(
-        Sureci(
-          name: (sureNo >= 1 && sureNo <= 114)
-              ? "${resmiSureIsimleri[sureNo - 1]} Suresi"
-              : "Sure $sureNo",
-          number: sureNo,
-          arabic: arabicMetin,
-          reading: okunusMetni,
-          meaning: mealMetni,
-        ),
-      );
-    }
-    return sureler;
-  }
-
-  static List<Sureci> _cozumle(String cachedJson) {
-    final list = jsonDecode(cachedJson) as List;
-    return list
-        .map(
-          (s) => Sureci(
-            name: s['ad'],
-            number: s['n'],
-            arabic: s['ar'],
-            reading: s['ok'],
-            meaning: s['me'],
-          ),
-        )
-        .toList();
-  }
-}
-
-// ==================== KUR'AN WEB VIEW ====================
+// ==================== KUR'AN & KİBLE WEBVIEW ====================
 class KuranWebView extends StatefulWidget {
   final bool isDark;
-
   const KuranWebView({super.key, required this.isDark});
 
   @override
@@ -1428,2337 +1067,782 @@ class KuranWebView extends StatefulWidget {
 }
 
 class _KuranWebViewState extends State<KuranWebView> {
-  late WebViewController _controller;
+  WebViewController? _controller;
   bool _isLoading = true;
-  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _kuranSayfasiniYukle();
-  }
-
-  void _kuranSayfasiniYukle() {
-    try {
+    if (!kIsWeb) {
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(
-            widget.isDark ? const Color(0xFF1A1118) : Colors.white)
+        ..setBackgroundColor(widget.isDark ? const Color(0xFF18181B) : Colors.white)
         ..setNavigationDelegate(
           NavigationDelegate(
-            onPageFinished: (String url) {
-              setState(() {
-                _isLoading = false;
-              });
-            },
-            onWebResourceError: (WebResourceError error) {
-              setState(() {
-                _isLoading = false;
-                _hasError = true;
-              });
+            onPageFinished: (url) {
+              if (mounted) setState(() => _isLoading = false);
             },
           ),
         )
         ..loadRequest(Uri.parse('https://kuran.diyanet.gov.tr/mushaf'));
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _hasError = true;
-      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_hasError) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 60,
-              color: widget.isDark ? Colors.white54 : Colors.black54,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "🌺 Kuran sayfası yüklenirken hata oluştu.\nİnternet bağlantınızı kontrol edin.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: widget.isDark ? Colors.white70 : Colors.black54,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _hasError = false;
-                  _isLoading = true;
-                  _kuranSayfasiniYukle();
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB5627A),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text("Yeniden Dene 🌸"),
-            ),
-          ],
-        ),
-      );
+    if (kIsWeb || _controller == null) {
+      return const Center(child: Text("Kur'an-ı Kerim Diyanet okuma ekranı"));
     }
-
-    return Column(
+    return Stack(
       children: [
-        Expanded(
-          child: Stack(
-            children: [
-              WebViewWidget(controller: _controller),
-              if (_isLoading)
-                const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFB5627A)),
-                ),
-            ],
-          ),
-        ),
-        AltBilgiMetni(isDark: widget.isDark),
+        WebViewWidget(controller: _controller!),
+        if (_isLoading) const Center(child: CircularProgressIndicator()),
       ],
     );
   }
 }
 
-// ==================== ZİKİRMATİK (TESBİHAT SAYACI) ====================
-class ZikirmatikSayfasi extends StatefulWidget {
+class KibleWebView extends StatefulWidget {
   final bool isDark;
+  final AppThemeData themeData;
 
-  const ZikirmatikSayfasi({super.key, required this.isDark});
+  const KibleWebView({
+    super.key,
+    required this.isDark,
+    required this.themeData,
+  });
 
   @override
-  State<ZikirmatikSayfasi> createState() => _ZikirmatikSayfasiState();
+  State<KibleWebView> createState() => _KibleWebViewState();
 }
 
-class _ZikirmatikSayfasiState extends State<ZikirmatikSayfasi> {
-  int _sayac = 0;
-  int _hedef = 33;
-  List<String> _zikirler = [
-    "Subhanallah",
-    "Elhamdulillah",
-    "Allahu Ekber",
-    "La ilahe illallah",
-    "Estağfirullah",
-  ];
-  int _seciliZikirIndex = 0;
-  String _yeniZikir = "";
-  int _yeniZikirHedefi = 33;
-  Map<String, int> _zikirHedefleri = {};
+class _KibleWebViewState extends State<KibleWebView> {
+  WebViewController? _controller;
+  bool _isLoading = true;
+  String _seciliKibleProvider = 'https://qiblafinder.withgoogle.com/';
+
+  final Map<String, String> _kibleProviderlar = {
+    "Google Qibla Finder": "https://qiblafinder.withgoogle.com/",
+    "Al-Adhan Qibla Compass": "https://qibla.aladhan.com/",
+    "Diyanet Kıble Bulucu": "https://kible.diyanet.gov.tr/",
+  };
 
   @override
   void initState() {
     super.initState();
-    _sayacYukle();
+    _initWebview(_seciliKibleProvider);
+  }
+
+  void _initWebview(String url) {
+    if (!kIsWeb) {
+      setState(() => _isLoading = true);
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(widget.isDark ? const Color(0xFF18181B) : Colors.white)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (finishedUrl) {
+              if (mounted) setState(() => _isLoading = false);
+            },
+          ),
+        )
+        ..loadRequest(Uri.parse(url));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.themeData;
+    final isDark = widget.isDark;
+
+    if (kIsWeb || _controller == null) {
+      return const Center(child: Text("Kıble Bulucu ekranı"));
+    }
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: isDark ? theme.cardDark : theme.cardLight,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Kıble Servisi:",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? theme.textDark : theme.primary,
+                ),
+              ),
+              DropdownButton<String>(
+                value: _seciliKibleProvider,
+                dropdownColor: isDark ? theme.cardDark : theme.cardLight,
+                items: _kibleProviderlar.entries.map((e) {
+                  return DropdownMenuItem(
+                    value: e.value,
+                    child: Text(
+                      e.key,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? theme.textDark : theme.primary,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _seciliKibleProvider = val);
+                    _initWebview(val);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Stack(
+            children: [
+              WebViewWidget(controller: _controller!),
+              if (_isLoading) Center(child: CircularProgressIndicator(color: theme.primary)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ==================== ZİKİRMATİK ====================
+class ZikirmatikPage extends StatefulWidget {
+  final bool isDark;
+  final AppThemeData themeData;
+
+  const ZikirmatikPage({
+    super.key,
+    required this.isDark,
+    required this.themeData,
+  });
+
+  @override
+  State<ZikirmatikPage> createState() => _ZikirmatikPageState();
+}
+
+class _ZikirmatikPageState extends State<ZikirmatikPage> {
+  int _counter = 0;
+  int _toplamZikirSayisi = 0;
+  List<Map<String, dynamic>> _zikirler = [
+    {"ad": "Sübhânallâh", "hedef": 33},
+    {"ad": "Elhamdülillâh", "hedef": 33},
+    {"ad": "Allâhuekber", "hedef": 33},
+    {"ad": "Lâ ilâhe illallâh", "hedef": 100},
+    {"ad": "Astağfirullâh", "hedef": 100},
+  ];
+  int _seciliIndex = 0;
+  List<Map<String, String>> _zikirDefteri = [];
+
+  @override
+  void initState() {
+    super.initState();
     _zikirleriYukle();
   }
 
   Future<void> _zikirleriYukle() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('zikir_listesi');
-    final savedIndex = prefs.getInt('secili_zikir_index');
-    final savedHedefler = prefs.getString('zikir_hedefleri_map');
-    if (saved != null && saved.isNotEmpty) {
-      setState(() {
-        _zikirler = saved;
-      });
+    final jsonStr = prefs.getString('custom_zikirler');
+    final defterStr = prefs.getString('zikir_defteri_logs');
+    final toplam = prefs.getInt('toplam_zikir_sayisi') ?? 0;
+
+    if (jsonStr != null) {
+      List<dynamic> list = jsonDecode(jsonStr);
+      _zikirler = list.map((e) => Map<String, dynamic>.from(e)).toList();
     }
-    if (savedHedefler != null) {
-      try {
-        final decoded = jsonDecode(savedHedefler) as Map<String, dynamic>;
-        setState(() {
-          _zikirHedefleri = decoded.map((k, v) => MapEntry(k, v as int));
-        });
-      } catch (_) {}
+    if (defterStr != null) {
+      List<dynamic> dList = jsonDecode(defterStr);
+      _zikirDefteri = dList.map((e) => Map<String, String>.from(e)).toList();
     }
-    if (savedIndex != null && savedIndex < _zikirler.length) {
-      setState(() {
-        _seciliZikirIndex = savedIndex;
-        _hedef = _zikirHedefleri[_zikirler[_seciliZikirIndex]] ?? _hedef;
-      });
-    }
+
+    setState(() {
+      _toplamZikirSayisi = toplam;
+    });
   }
 
   Future<void> _zikirleriKaydet() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('zikir_listesi', _zikirler);
-    await prefs.setInt('secili_zikir_index', _seciliZikirIndex);
-    await prefs.setString('zikir_hedefleri_map', jsonEncode(_zikirHedefleri));
+    await prefs.setString('custom_zikirler', jsonEncode(_zikirler));
+    await prefs.setString('zikir_defteri_logs', jsonEncode(_zikirDefteri));
+    await prefs.setInt('toplam_zikir_sayisi', _toplamZikirSayisi);
   }
 
-  Future<void> _sayacYukle() async {
-    final prefs = await SharedPreferences.getInstance();
+  void _zikriDeftereKaydet() {
+    if (_counter == 0) return;
+    final zikIsim = _zikirler.isNotEmpty ? _zikirler[_seciliIndex]["ad"] : "Zikir";
+    final agacObj = _getAgacDurumu(_counter);
+    final tarih = DateFormat('d MMMM HH:mm', 'tr_TR').format(DateTime.now());
+
     setState(() {
-      _sayac = prefs.getInt('zikir_sayac') ?? 0;
-      _hedef = prefs.getInt('zikir_hedef') ?? 33;
-    });
-  }
-
-  Future<void> _sayacKaydet() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('zikir_sayac', _sayac);
-    await prefs.setInt('zikir_hedef', _hedef);
-  }
-
-  void _zikirEkle() {
-    if (_yeniZikir.trim().isEmpty) return;
-    final metin = _yeniZikir.trim();
-    setState(() {
-      _zikirler.add(metin);
-      _zikirHedefleri[metin] = _yeniZikirHedefi;
-      _yeniZikir = "";
-      _yeniZikirHedefi = 33;
+      _zikirDefteri.insert(0, {
+        "zikir": zikIsim,
+        "sayi": "$_counter",
+        "tarih": tarih,
+        "agac": agacObj["emoji"]!,
+      });
+      _counter = 0;
     });
     _zikirleriKaydet();
-  }
-
-  void _zikirSil(int index) {
-    setState(() {
-      _zikirler.removeAt(index);
-      if (_seciliZikirIndex >= _zikirler.length) {
-        _seciliZikirIndex = _zikirler.length - 1;
-      }
-    });
-    _zikirleriKaydet();
-  }
-
-  void _arttir() {
-    setState(() {
-      _sayac++;
-      if (_sayac >= _hedef) {
-        _sayac = 0;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text("🌸 ${_zikirler[_seciliZikirIndex]} zikri tamamlandı!"),
-            backgroundColor: const Color(0xFFB5627A),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        if (!kIsWeb) {
-          HapticFeedback.lightImpact();
-        }
-      }
-      _sayacKaydet();
-    });
-  }
-
-  void _sifirla() {
-    setState(() {
-      _sayac = 0;
-      _sayacKaydet();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isSmallScreen = screenHeight < 700;
-
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: FlowerBackground(
-        isDark: widget.isDark,
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              children: [
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.arrow_back,
-                          color:
-                              widget.isDark ? Colors.white70 : Colors.black54,
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      const Spacer(),
-                      Flexible(
-                        child: Text(
-                          "\"Ey iman edenler! Allah'ı çok çok zikredin.\"\nAhzab 41",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontStyle: FontStyle.italic,
-                            fontWeight: FontWeight.bold,
-                            color: widget.isDark
-                                ? Colors.white
-                                : const Color(0xFF4A2E3B),
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: Icon(
-                          Icons.refresh,
-                          color:
-                              widget.isDark ? Colors.white70 : Colors.black54,
-                        ),
-                        onPressed: _sifirla,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: widget.isDark
-                        ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE8C4D0)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Hedef:",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(width: 12),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle, size: 28),
-                            onPressed: () {
-                              setState(() {
-                                if (_hedef > 1) {
-                                  _hedef--;
-                                  _sayac = 0;
-                                  if (_zikirler.isNotEmpty) {
-                                    _zikirHedefleri[
-                                        _zikirler[_seciliZikirIndex]] = _hedef;
-                                  }
-                                }
-                              });
-                              _sayacKaydet();
-                              _zikirleriKaydet();
-                            },
-                          ),
-                          Text(
-                            "$_hedef",
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFB5627A),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle, size: 28),
-                            onPressed: () {
-                              setState(() {
-                                if (_hedef < 999) {
-                                  _hedef++;
-                                  _sayac = 0;
-                                  if (_zikirler.isNotEmpty) {
-                                    _zikirHedefleri[
-                                        _zikirler[_seciliZikirIndex]] = _hedef;
-                                  }
-                                }
-                              });
-                              _sayacKaydet();
-                              _zikirleriKaydet();
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _zikirler.isNotEmpty
-                          ? _zikirler[_seciliZikirIndex]
-                          : "Zikir ekleyin",
-                      style: TextStyle(
-                        fontSize: isSmallScreen ? 22 : 28,
-                        fontWeight: FontWeight.bold,
-                        color: widget.isDark
-                            ? const Color(0xFFF5B7B7)
-                            : const Color(0xFF4A2E3B),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: isSmallScreen ? 160 : 200,
-                          height: isSmallScreen ? 160 : 200,
-                          child: CircularProgressIndicator(
-                            value: _sayac / _hedef,
-                            strokeWidth: isSmallScreen ? 10 : 12,
-                            valueColor:
-                                const AlwaysStoppedAnimation(Color(0xFFB5627A)),
-                            backgroundColor: widget.isDark
-                                ? Colors.white10
-                                : const Color(0xFFE8C4D0)
-                                    .withValues(alpha: 0.3),
-                          ),
-                        ),
-                        Text(
-                          "$_sayac",
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 48 : 64,
-                            fontWeight: FontWeight.bold,
-                            color: widget.isDark
-                                ? Colors.white
-                                : const Color(0xFFB5627A),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "/ $_hedef",
-                      style: TextStyle(
-                        fontSize: isSmallScreen ? 14 : 18,
-                        color: widget.isDark
-                            ? Colors.white54
-                            : Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: _arttir,
-                      child: Container(
-                        width: isSmallScreen ? 120 : 160,
-                        height: isSmallScreen ? 120 : 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: const [
-                              Color(0xFFB5627A),
-                              Color(0xFFE8C4D0),
-                            ],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFB5627A)
-                                  .withValues(alpha: 0.3),
-                              blurRadius: 20,
-                            ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Text(
-                            "🌸",
-                            style: TextStyle(
-                              fontSize: 50,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _sifirla,
-                          icon: const Icon(Icons.restart_alt),
-                          label: const Text("Sıfırla"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: widget.isDark
-                                ? Colors.white24
-                                : Colors.grey.shade300,
-                            foregroundColor:
-                                widget.isDark ? Colors.white70 : Colors.black54,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _sayac = _hedef;
-                            });
-                            _sayacKaydet();
-                          },
-                          icon: const Icon(Icons.check),
-                          label: const Text("Tamamla"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE8C4D0),
-                            foregroundColor: const Color(0xFF4A2E3B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: widget.isDark
-                        ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE8C4D0)),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            "Zikir:",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Expanded(
-                            child: DropdownButton<int>(
-                              value: _seciliZikirIndex,
-                              dropdownColor: widget.isDark
-                                  ? const Color(0xFF2D1B2E)
-                                  : Colors.white,
-                              style: TextStyle(
-                                color:
-                                    widget.isDark ? Colors.white : Colors.black,
-                              ),
-                              isExpanded: true,
-                              items: _zikirler.asMap().entries.map((entry) {
-                                return DropdownMenuItem(
-                                  value: entry.key,
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          entry.value,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close,
-                                            size: 18, color: Colors.red),
-                                        onPressed: () => _zikirSil(entry.key),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _seciliZikirIndex = value!;
-                                  _sayac = 0;
-                                  _hedef = _zikirHedefleri[
-                                          _zikirler[_seciliZikirIndex]] ??
-                                      33;
-                                });
-                                _sayacKaydet();
-                                _zikirleriKaydet();
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              onChanged: (value) => _yeniZikir = value,
-                              decoration: InputDecoration(
-                                hintText: "Yeni zikir ekle...",
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                filled: true,
-                                fillColor: widget.isDark
-                                    ? Colors.white.withValues(alpha: 0.05)
-                                    : Colors.grey.shade50,
-                              ),
-                              style: TextStyle(
-                                color:
-                                    widget.isDark ? Colors.white : Colors.black,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: _zikirEkle,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFB5627A),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                            ),
-                            child: const Text("Ekle"),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: widget.isDark
-                              ? Colors.white.withValues(alpha: 0.05)
-                              : Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: widget.isDark
-                                ? Colors.white24
-                                : Colors.grey.shade300,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Yeni zikrin hedefi:",
-                                style: TextStyle(fontSize: 13)),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove, size: 18),
-                                  onPressed: () {
-                                    setState(() {
-                                      if (_yeniZikirHedefi > 1)
-                                        _yeniZikirHedefi--;
-                                    });
-                                  },
-                                ),
-                                Text("$_yeniZikirHedefi",
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFFB5627A))),
-                                IconButton(
-                                  icon: const Icon(Icons.add, size: 18),
-                                  onPressed: () {
-                                    setState(() {
-                                      if (_yeniZikirHedefi < 999)
-                                        _yeniZikirHedefi++;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                AltBilgiMetni(isDark: widget.isDark),
-              ],
-            ),
-          ),
-        ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Zikir Defterinize kaydedildi! 🌸"),
+        backgroundColor: widget.themeData.primary,
       ),
     );
   }
-}
 
-// ==================== KIBLE PUSULASI (DÜZELTİLMİŞ) ====================
-class KiblePusulasi extends StatefulWidget {
-  final bool isDark;
-
-  const KiblePusulasi({super.key, required this.isDark});
-
-  @override
-  State<KiblePusulasi> createState() => _KiblePusulasiState();
-}
-
-class _KiblePusulasiState extends State<KiblePusulasi> {
-  late WebViewController _controller;
-  bool _isLoading = true;
-  bool _hasError = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _qiblaSayfasiniYukle();
-  }
-
-  void _qiblaSayfasiniYukle() {
-    try {
-      _controller = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(
-            widget.isDark ? const Color(0xFF1A1118) : Colors.white)
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onPageFinished: (String url) {
-              setState(() {
-                _isLoading = false;
-              });
-            },
-            onWebResourceError: (WebResourceError error) {
-              setState(() {
-                _isLoading = false;
-                _hasError = true;
-              });
-            },
-          ),
-        )
-        ..loadRequest(
-            Uri.parse('https://qiblafinder.withgoogle.com/intl/tr/finder/ar'));
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _hasError = true;
-      });
-    }
-  }
-
-  void _yenidenDene() {
-    setState(() {
-      _hasError = false;
-      _isLoading = true;
-      _qiblaSayfasiniYukle();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_hasError) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 60,
-              color: widget.isDark ? Colors.white54 : Colors.black54,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "Kıble sayfası yüklenirken hata oluştu.\nİnternet bağlantınızı kontrol edin.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: widget.isDark ? Colors.white70 : Colors.black54,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _yenidenDene,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB5627A),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text("Yeniden Dene 🌸"),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Scaffold(
-      body: FlowerBackground(
-        isDark: widget.isDark,
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "🕋 Kıble Bulucu",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: widget.isDark
-                            ? Colors.white
-                            : const Color(0xFF4A2E3B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Stack(
-                  children: [
-                    WebViewWidget(controller: _controller),
-                    if (_isLoading)
-                      const Center(
-                        child:
-                            CircularProgressIndicator(color: Color(0xFFB5627A)),
-                      ),
-                  ],
-                ),
-              ),
-              AltBilgiMetni(isDark: widget.isDark),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ==================== ANA SAYFA GEZGİNİ ====================
-class AnaSayfaGezgini extends StatefulWidget {
-  final bool isDarkMode;
-  final ValueChanged<bool> onThemeChanged;
-  final bool bildirimIzniKaliciRed;
-  final double yaziBoyutuOlcegi;
-  final ValueChanged<double> onYaziBoyutuChanged;
-
-  const AnaSayfaGezgini({
-    super.key,
-    required this.isDarkMode,
-    required this.onThemeChanged,
-    required this.bildirimIzniKaliciRed,
-    required this.yaziBoyutuOlcegi,
-    required this.onYaziBoyutuChanged,
-  });
-
-  @override
-  State<AnaSayfaGezgini> createState() => _AnaSayfaGezginiState();
-}
-
-class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
-  int _aktifSayfaIndex = 0;
-  String secilenSehir = "Seçilmedi";
-  String secilenIlce = "Seçilmedi";
-  bool isLoading = false;
-  List<dynamic> aylikVeriHavuzu = [];
-
-  final Map<String, List<String>> _ilIlceMap = {
-    "Adana": [
-      "Aladağ",
-      "Ceyhan",
-      "Çukurova",
-      "Feke",
-      "İmamoğlu",
-      "Karaisalı",
-      "Karataş",
-      "Kozan",
-      "Pozantı",
-      "Saimbeyli",
-      "Sarıçam",
-      "Seyhan",
-      "Tufanbeyli",
-      "Yumurtalık",
-      "Yüreğir"
-    ],
-    "Adıyaman": [
-      "Merkez",
-      "Besni",
-      "Çelikhan",
-      "Gerger",
-      "Gölbaşı",
-      "Kahta",
-      "Samsat",
-      "Sincik",
-      "Tut"
-    ],
-    "Afyonkarahisar": [
-      "Merkez",
-      "Başmakçı",
-      "Bayat",
-      "Bolvadin",
-      "Çay",
-      "Çobanlar",
-      "Dazkırı",
-      "Dinar",
-      "Emirdağ",
-      "Evciler",
-      "Hocalar",
-      "İhsaniye",
-      "İscehisar",
-      "Kızılören",
-      "Sandıklı",
-      "Sinanpaşa",
-      "Şuhut",
-      "Sultandağı"
-    ],
-    "Ağrı": [
-      "Merkez",
-      "Diyadin",
-      "Doğubayazıt",
-      "Eleşkirt",
-      "Hamur",
-      "Patnos",
-      "Taşlıçay",
-      "Tutak"
-    ],
-    "Amasya": [
-      "Merkez",
-      "Göynücek",
-      "Gümüşhacıköy",
-      "Hamamözü",
-      "Merzifon",
-      "Suluova",
-      "Taşova"
-    ],
-    "Ankara": [
-      "Akyurt",
-      "Altındağ",
-      "Ayaş",
-      "Bala",
-      "Beypazarı",
-      "Çamlıdere",
-      "Çankaya",
-      "Çubuk",
-      "Elmadağ",
-      "Etimesgut",
-      "Evren",
-      "Gölbaşı",
-      "Güdül",
-      "Haymana",
-      "Kahramankazan",
-      "Kalecik",
-      "Keçiören",
-      "Kızılcahamam",
-      "Mamak",
-      "Nallıhan",
-      "Polatlı",
-      "Pursaklar",
-      "Şereflikoçhisar",
-      "Sincan",
-      "Yenimahalle"
-    ],
-    "Antalya": [
-      "Akseki",
-      "Aksu",
-      "Alanya",
-      "Demre",
-      "Döşemealtı",
-      "Elmalı",
-      "Finike",
-      "Gazipaşa",
-      "Gündoğmuş",
-      "İbradı",
-      "Kaş",
-      "Kemer",
-      "Kepez",
-      "Konyaaltı",
-      "Korkuteli",
-      "Kumluca",
-      "Manavgat",
-      "Muratpaşa",
-      "Serik"
-    ],
-    "Artvin": [
-      "Merkez",
-      "Ardanuç",
-      "Arhavi",
-      "Borçka",
-      "Hopa",
-      "Kemalpaşa",
-      "Murgul",
-      "Şavşat",
-      "Yusufeli"
-    ],
-    "Aydın": [
-      "Bozdoğan",
-      "Buharkent",
-      "Çine",
-      "Didim",
-      "Efeler",
-      "Germencik",
-      "İncirliova",
-      "Karacasu",
-      "Karpuzlu",
-      "Koçarlı",
-      "Köşk",
-      "Kuşadası",
-      "Kuyucak",
-      "Nazilli",
-      "Söke",
-      "Sultanhisar",
-      "Yenipazar"
-    ],
-    "Balıkesir": [
-      "Altıeylül",
-      "Ayvalık",
-      "Balya",
-      "Bandırma",
-      "Bigadiç",
-      "Burhaniye",
-      "Dursunbey",
-      "Edremit",
-      "Erdek",
-      "Gömeç",
-      "Gönen",
-      "Havran",
-      "İvrindi",
-      "Karesi",
-      "Kepsut",
-      "Manyas",
-      "Marmara",
-      "Savaştepe",
-      "Sındırgı",
-      "Susurluk"
-    ],
-    "Bilecik": [
-      "Merkez",
-      "Bozüyük",
-      "Gölpazarı",
-      "İnhisar",
-      "Osmaneli",
-      "Pazaryeri",
-      "Söğüt",
-      "Yenipazar"
-    ],
-    "Bingöl": [
-      "Merkez",
-      "Adaklı",
-      "Genç",
-      "Karlıova",
-      "Kiğı",
-      "Solhan",
-      "Yayladere",
-      "Yedisu"
-    ],
-    "Bitlis": [
-      "Merkez",
-      "Adilcevaz",
-      "Ahlat",
-      "Güroymak",
-      "Hizan",
-      "Mutki",
-      "Tatvan"
-    ],
-    "Bolu": [
-      "Merkez",
-      "Dörtdivan",
-      "Gerede",
-      "Göynük",
-      "Kıbrıscık",
-      "Mengen",
-      "Mudurnu",
-      "Seben",
-      "Yeniçağa"
-    ],
-    "Burdur": [
-      "Merkez",
-      "Ağlasun",
-      "Altınyayla",
-      "Bucak",
-      "Çavdır",
-      "Çeltikçi",
-      "Gölhisar",
-      "Karamanlı",
-      "Kemer",
-      "Tefenni",
-      "Yeşilova"
-    ],
-    "Bursa": [
-      "Büyükorhan",
-      "Gemlik",
-      "Gürsu",
-      "Harmancık",
-      "İnegöl",
-      "İznik",
-      "Karacabey",
-      "Keles",
-      "Kestel",
-      "Mudanya",
-      "Mustafakemalpaşa",
-      "Nilüfer",
-      "Orhaneli",
-      "Orhangazi",
-      "Osmangazi",
-      "Yenişehir",
-      "Yıldırım"
-    ],
-    "Çanakkale": [
-      "Merkez",
-      "Ayvacık",
-      "Bayramiç",
-      "Biga",
-      "Bozcaada",
-      "Çan",
-      "Eceabat",
-      "Ezine",
-      "Gelibolu",
-      "Gökçeada",
-      "Lapseki",
-      "Yenice"
-    ],
-    "Çankırı": [
-      "Merkez",
-      "Atkaracalar",
-      "Bayramören",
-      "Çerkeş",
-      "Eldivan",
-      "Ilgaz",
-      "Kızılırmak",
-      "Korgun",
-      "Kurşunlu",
-      "Orta",
-      "Şabanözü",
-      "Yapraklı"
-    ],
-    "Çorum": [
-      "Merkez",
-      "Alaca",
-      "Bayat",
-      "Boğazkale",
-      "Dodurga",
-      "İskilip",
-      "Kargı",
-      "Laçin",
-      "Mecitözü",
-      "Oğuzlar",
-      "Ortaköy",
-      "Osmancık",
-      "Sungurlu",
-      "Uğurludağ"
-    ],
-    "Denizli": [
-      "Acıpayam",
-      "Babadag",
-      "Baklan",
-      "Bekilli",
-      "Beyağaç",
-      "Bozkurt",
-      "Buldan",
-      "Çal",
-      "Çameli",
-      "Çardak",
-      "Çivril",
-      "Güney",
-      "Honaz",
-      "Kale",
-      "Merkezefendi",
-      "Pamukkale",
-      "Sarayköy",
-      "Serinhisar",
-      "Tavas"
-    ],
-    "Diyarbakır": [
-      "Bağlar",
-      "Bismil",
-      "Çermik",
-      "Çınar",
-      "Çüngüş",
-      "Dicle",
-      "Eğil",
-      "Ergani",
-      "Hani",
-      "Hazro",
-      "Kayapınar",
-      "Kocaköy",
-      "Kulp",
-      "Lice",
-      "Silvan",
-      "Sur",
-      "Yenişehir"
-    ],
-    "Edirne": [
-      "Merkez",
-      "Enez",
-      "Havsa",
-      "İpsala",
-      "Keşan",
-      "Lalapaşa",
-      "Meriç",
-      "Süloğlu",
-      "Uzunköprü"
-    ],
-    "Elazığ": [
-      "Merkez",
-      "Ağın",
-      "Alacakaya",
-      "Arıcak",
-      "Baskil",
-      "Karakocan",
-      "Keban",
-      "Kovancılar",
-      "Maden",
-      "Palu",
-      "Sivrice"
-    ],
-    "Erzincan": [
-      "Merkez",
-      "Çayırlı",
-      "İliç",
-      "Kemah",
-      "Kemaliye",
-      "Otlukbeli",
-      "Refahiye",
-      "Tercan",
-      "Üzümlü"
-    ],
-    "Erzurum": [
-      "Aşkale",
-      "Aziziye",
-      "Çat",
-      "Hınıs",
-      "Horasan",
-      "İspir",
-      "Karaçoban",
-      "Karayazı",
-      "Köprüköy",
-      "Narman",
-      "Oltu",
-      "Olur",
-      "Palandöken",
-      "Pasinler",
-      "Pazaryolu",
-      "Şenkaya",
-      "Tekman",
-      "Tortum",
-      "Uzundere",
-      "Yakutiye"
-    ],
-    "Eskişehir": [
-      "Alpu",
-      "Beylikova",
-      "Çifteler",
-      "Günyüzü",
-      "Han",
-      "İnönü",
-      "Mahmudiye",
-      "Mihalgazi",
-      "Mihalıççık",
-      "Odunpazarı",
-      "Sarıcakaya",
-      "Seyitgazi",
-      "Sivrihisar",
-      "Tepebaşı"
-    ],
-    "Gaziantep": [
-      "Araban",
-      "İslahiye",
-      "Karkamış",
-      "Nizip",
-      "Nurdağı",
-      "Oğuzeli",
-      "Şahinbey",
-      "Şehitkamil",
-      "Yavuzeli"
-    ],
-    "Giresun": [
-      "Merkez",
-      "Alucra",
-      "Bulancak",
-      "Çamoluk",
-      "Çanakçı",
-      "Dereli",
-      "Doğankent",
-      "Espiye",
-      "Eynesil",
-      "Görele",
-      "Güce",
-      "Keşap",
-      "Piraziz",
-      "Şebinkarahisar",
-      "Tirebolu",
-      "Yağlıdere"
-    ],
-    "Gümüşhane": ["Merkez", "Kelkit", "Köse", "Kürtün", "Şiran", "Torul"],
-    "Hakkari": ["Merkez", "Çukurca", "Derecik", "Şemdinli", "Yüksekova"],
-    "Hatay": [
-      "Altınözü",
-      "Antakya",
-      "Arsuz",
-      "Belen",
-      "Defne",
-      "Dörtyol",
-      "Erzin",
-      "Hassa",
-      "İskenderun",
-      "Kırıkhan",
-      "Kumlu",
-      "Payas",
-      "Reyhanlı",
-      "Samandağ",
-      "Yayladağı"
-    ],
-    "Isparta": [
-      "Merkez",
-      "Aksu",
-      "Atabey",
-      "Eğirdir",
-      "Gelendost",
-      "Gönen",
-      "Keçiborlu",
-      "Şarkikaraağaç",
-      "Senirkent",
-      "Sütçüler",
-      "Uluborlu",
-      "Yalvaç",
-      "Yenişarbademli"
-    ],
-    "Mersin": [
-      "Akdeniz",
-      "Anamur",
-      "Aydıncık",
-      "Bozyazı",
-      "Çamlıyayla",
-      "Erdemli",
-      "Gülnar",
-      "Mezitli",
-      "Mut",
-      "Silifke",
-      "Tarsus",
-      "Toroslar",
-      "Yenişehir"
-    ],
-    "İstanbul": [
-      "Adalar",
-      "Arnavutköy",
-      "Ataşehir",
-      "Avcılar",
-      "Bağcılar",
-      "Bahçelievler",
-      "Bakırköy",
-      "Başakşehir",
-      "Bayrampaşa",
-      "Beşiktaş",
-      "Beykoz",
-      "Beylikdüzü",
-      "Beyoğlu",
-      "Büyükçekmece",
-      "Çatalca",
-      "Çekmeköy",
-      "Esenler",
-      "Esenyurt",
-      "Eyüpsultan",
-      "Fatih",
-      "Gaziosmanpaşa",
-      "Güngören",
-      "Kadıköy",
-      "Kağıthane",
-      "Kartal",
-      "Küçükçekmece",
-      "Maltepe",
-      "Pendik",
-      "Sancaktepe",
-      "Sarıyer",
-      "Şile",
-      "Silivri",
-      "Şişli",
-      "Sultanbeyli",
-      "Sultangazi",
-      "Tuzla",
-      "Ümraniye",
-      "Üsküdar",
-      "Zeytinburnu"
-    ],
-    "İzmir": [
-      "Aliağa",
-      "Balçova",
-      "Bayındır",
-      "Bayraklı",
-      "Bergama",
-      "Beydağ",
-      "Bornova",
-      "Buca",
-      "Çeşme",
-      "Çiğli",
-      "Dikili",
-      "Foça",
-      "Gaziemir",
-      "Güzelbahçe",
-      "Karabaglar",
-      "Karaburun",
-      "Karşıyaka",
-      "Kemalpaşa",
-      "Kınık",
-      "Kiraz",
-      "Konak",
-      "Menderes",
-      "Menemen",
-      "Narlıdere",
-      "Ödemiş",
-      "Seferihisar",
-      "Selçuk",
-      "Tire",
-      "Torbalı",
-      "Urla"
-    ],
-    "Kars": [
-      "Merkez",
-      "Akyaka",
-      "Arpaçay",
-      "Digor",
-      "Kağızman",
-      "Sarıkamış",
-      "Selim",
-      "Susuz"
-    ],
-    "Kastamonu": [
-      "Merkez",
-      "Abana",
-      "Ağlı",
-      "Araç",
-      "Azdavay",
-      "Bozkurt",
-      "Çatalzeytin",
-      "Cide",
-      "Daday",
-      "Devrekani",
-      "Doğanyurt",
-      "Hanönü",
-      "İhsangazi",
-      "İnebolu",
-      "Küre",
-      "Pınarbaşı",
-      "Şenpazar",
-      "Seydiler",
-      "Taşköprü",
-      "Tosya"
-    ],
-    "Kayseri": [
-      "Akkışla",
-      "Bünyan",
-      "Develi",
-      "Felahiye",
-      "Hacılar",
-      "İncesu",
-      "Kocasinan",
-      "Melikgazi",
-      "Özvatan",
-      "Pınarbaşı",
-      "Sarıoğlan",
-      "Sarız",
-      "Talas",
-      "Tomarza",
-      "Yahyalı",
-      "Yeşilhisar"
-    ],
-    "Kırklareli": [
-      "Merkez",
-      "Babaeski",
-      "Demirköy",
-      "Kofçaz",
-      "Lüleburgaz",
-      "Pehlivanköy",
-      "Pınarhisar",
-      "Vize"
-    ],
-    "Kırşehir": [
-      "Merkez",
-      "Akçakent",
-      "Akpınar",
-      "Boztepe",
-      "Çiçekdağı",
-      "Kaman",
-      "Mucur"
-    ],
-    "Kocaeli": [
-      "Başiskele",
-      "Çayırova",
-      "Darıca",
-      "Derince",
-      "Dilovası",
-      "Gebze",
-      "Gölcük",
-      "İzmit",
-      "Kandıra",
-      "Karamürsel",
-      "Kartepe",
-      "Körfez"
-    ],
-    "Konya": [
-      "Ahırlı",
-      "Akören",
-      "Akşehir",
-      "Altınekin",
-      "Beyşehir",
-      "Bozkır",
-      "Çeltik",
-      "Cihanbeyli",
-      "Çumra",
-      "Derbent",
-      "Derebucak",
-      "Doğanhisar",
-      "Emirgazi",
-      "Ereğli",
-      "Güneysınır",
-      "Hadim",
-      "Halkapınar",
-      "Hüyük",
-      "Ilgın",
-      "Kadınhanı",
-      "Karapınar",
-      "Karatay",
-      "Kulu",
-      "Meram",
-      "Sarayönü",
-      "Selçuklu",
-      "Seydişehir",
-      "Taşkent",
-      "Tuzlukçu",
-      "Yalıhüyük",
-      "Yunak"
-    ],
-    "Kütahya": [
-      "Merkez",
-      "Altıntaş",
-      "Aslanapa",
-      "Çavdarhisar",
-      "Domaniç",
-      "Dumlupınar",
-      "Emet",
-      "Gediz",
-      "Hisarcık",
-      "Pazarlar",
-      "Şaphane",
-      "Simav",
-      "Tavşanlı"
-    ],
-    "Malatya": [
-      "Akçadağ",
-      "Arapgir",
-      "Arguvan",
-      "Battalgazi",
-      "Darende",
-      "Doğanşehir",
-      "Doğanyol",
-      "Hekimhan",
-      "Kale",
-      "Kuluncak",
-      "Pütürge",
-      "Yazıhan",
-      "Yeşilyurt"
-    ],
-    "Manisa": [
-      "Ahmetli",
-      "Akhisar",
-      "Alaşehir",
-      "Demirci",
-      "Gölmarmara",
-      "Gördes",
-      "Kırkağaç",
-      "Köprübaşı",
-      "Kula",
-      "Salihli",
-      "Sarıgöl",
-      "Saruhanlı",
-      "Şehzadeler",
-      "Selendi",
-      "Soma",
-      "Turgutlu",
-      "Yunusemre"
-    ],
-    "Kahramanmaraş": [
-      "Afşin",
-      "Andırın",
-      "Çağlayancerit",
-      "Dulkadiroğlu",
-      "Ekinözü",
-      "Elbistan",
-      "Göksun",
-      "Nurhak",
-      "Onikişubat",
-      "Pazarcık",
-      "Türkoğlu"
-    ],
-    "Mardin": [
-      "Artuklu",
-      "Dargeçit",
-      "Derik",
-      "Kızıltepe",
-      "Mazıdağı",
-      "Midyat",
-      "Nusaybin",
-      "Ömerli",
-      "Savur",
-      "Yeşilli"
-    ],
-    "Muğla": [
-      "Bodrum",
-      "Dalaman",
-      "Datça",
-      "Fethiye",
-      "Kavaklıdere",
-      "Köyceğiz",
-      "Marmaris",
-      "Menteşe",
-      "Milas",
-      "Ortaca",
-      "Seydikemer",
-      "Ula",
-      "Yatağan"
-    ],
-    "Muş": ["Merkez", "Bulanık", "Hasköy", "Korkut", "Malazgirt", "Varto"],
-    "Nevşehir": [
-      "Merkez",
-      "Acıgöl",
-      "Avanos",
-      "Derinkuyu",
-      "Gülşehir",
-      "Hacıbektaş",
-      "Kozaklı",
-      "Ürgüp"
-    ],
-    "Niğde": ["Merkez", "Altunhisar", "Bor", "Çamardı", "Çiftlik", "Ulukışla"],
-    "Ordu": [
-      "Akkuş",
-      "Altınordu",
-      "Aybastı",
-      "Çamaş",
-      "Çatalpınar",
-      "Çaybaşı",
-      "Fatsa",
-      "Gölköy",
-      "Gülyalı",
-      "Gürgentepe",
-      "İkizce",
-      "Kabadüz",
-      "Kabataş",
-      "Korgan",
-      "Kumru",
-      "Mesudiye",
-      "Perşembe",
-      "Ulubey",
-      "Ünye"
-    ],
-    "Rize": [
-      "Merkez",
-      "Ardeşen",
-      "Çamlıhemşin",
-      "Çayeli",
-      "Derepazarı",
-      "Fındıklı",
-      "Güneysu",
-      "Hemşin",
-      "İkizdere",
-      "İyidere",
-      "Kalkandere",
-      "Pazar"
-    ],
-    "Sakarya": [
-      "Adapazarı",
-      "Akyazı",
-      "Arifiye",
-      "Erenler",
-      "Ferizli",
-      "Geyve",
-      "Hendek",
-      "Karapürçek",
-      "Karasu",
-      "Kaynarca",
-      "Kocaali",
-      "Pamukova",
-      "Sapanca",
-      "Serdivan",
-      "Söğütlü",
-      "Taraklı"
-    ],
-    "Samsun": [
-      "19 Mayıs",
-      "Alaçam",
-      "Asarcık",
-      "Atakum",
-      "Ayvacık",
-      "Bafra",
-      "Canik",
-      "Çarşamba",
-      "Havza",
-      "İlkadım",
-      "Kavak",
-      "Ladik",
-      "Salıpazarı",
-      "Tekkeköy",
-      "Terme",
-      "Vezirköprü",
-      "Yakakent"
-    ],
-    "Siirt": [
-      "Merkez",
-      "Baykan",
-      "Eruh",
-      "Kurtalan",
-      "Pervari",
-      "Şirvan",
-      "Tillo"
-    ],
-    "Sinop": [
-      "Merkez",
-      "Ayancık",
-      "Boyabat",
-      "Dikmen",
-      "Durağan",
-      "Erfelek",
-      "Gerze",
-      "Saraydüzü",
-      "Türkeli"
-    ],
-    "Sivas": [
-      "Merkez",
-      "Akıncılar",
-      "Altınyayla",
-      "Divriği",
-      "Doğanşar",
-      "Gemerek",
-      "Gölova",
-      "Gürün",
-      "Hafik",
-      "İmranlı",
-      "Kangal",
-      "Koyulhisar",
-      "Şarkışla",
-      "Suşehri",
-      "Ulaş",
-      "Yıldızeli",
-      "Zara"
-    ],
-    "Tekirdağ": [
-      "Çerkezköy",
-      "Çorlu",
-      "Ergene",
-      "Hayrabolu",
-      "Kapaklı",
-      "Malkara",
-      "Marmaraereğlisi",
-      "Muratlı",
-      "Saray",
-      "Şarköy",
-      "Süleymanpaşa"
-    ],
-    "Tokat": [
-      "Merkez",
-      "Almus",
-      "Artova",
-      "Başçiftlik",
-      "Erbaa",
-      "Niksar",
-      "Pazar",
-      "Reşadiye",
-      "Sulusaray",
-      "Turhal",
-      "Yeşilyurt",
-      "Zile"
-    ],
-    "Trabzon": [
-      "Akçaabat",
-      "Araklı",
-      "Arsin",
-      "Beşikdüzü",
-      "Çarşıbaşı",
-      "Çaykara",
-      "Dernekpazarı",
-      "Düzköy",
-      "Hayrat",
-      "Köprübaşı",
-      "Maçka",
-      "Of",
-      "Ortahisar",
-      "Salpazarı",
-      "Sürmene",
-      "Tonya",
-      "Vakfıkebir",
-      "Yomra"
-    ],
-    "Tunceli": [
-      "Merkez",
-      "Çemişgezek",
-      "Hozat",
-      "Mazgirt",
-      "Nazimiye",
-      "Ovacık",
-      "Pertek",
-      "Pülümür"
-    ],
-    "Şanlıurfa": [
-      "Akçakale",
-      "Birecik",
-      "Bozova",
-      "Ceylanpınar",
-      "Eyyübiye",
-      "Halfeti",
-      "Haliliye",
-      "Harran",
-      "Hilvan",
-      "Karaköprü",
-      "Siverek",
-      "Suruç",
-      "Viranşehir"
-    ],
-    "Uşak": ["Merkez", "Banaz", "Eşme", "Karahallı", "Sivaslı", "Ulubey"],
-    "Van": [
-      "Bahçesaray",
-      "Başkale",
-      "Çaldıran",
-      "Çatak",
-      "Edremit",
-      "Erciş",
-      "Gevaş",
-      "Gürpınar",
-      "İpekyolu",
-      "Muradiye",
-      "Özalp",
-      "Saray",
-      "Tuşba"
-    ],
-    "Yozgat": [
-      "Merkez",
-      "Akdağmadeni",
-      "Aydıncık",
-      "Boğazlıyan",
-      "Çandır",
-      "Çayıralan",
-      "Çekerek",
-      "Kadışehri",
-      "Saraykent",
-      "Sarıkaya",
-      "Sefaatli",
-      "Sorgun",
-      "Yenifakılı",
-      "Yerköy"
-    ],
-    "Zonguldak": [
-      "Merkez",
-      "Alaplı",
-      "Çaycuma",
-      "Devrek",
-      "Ereğli",
-      "Gökçebey",
-      "Kilimli",
-      "Kozlu"
-    ],
-    "Aksaray": [
-      "Merkez",
-      "Ağaçören",
-      "Eskil",
-      "Gülağaç",
-      "Güzelyurt",
-      "Ortaköy",
-      "Sarıyahşi",
-      "Sultanhanı"
-    ],
-    "Bayburt": ["Merkez", "Aydıntepe", "Demirözü"],
-    "Karaman": [
-      "Merkez",
-      "Ayrancı",
-      "Başyayla",
-      "Ermenek",
-      "Kazımkarabekir",
-      "Sariveliler"
-    ],
-    "Kırıkkale": [
-      "Merkez",
-      "Bahşılı",
-      "Balışeyh",
-      "Çelebi",
-      "Delice",
-      "Karakeçili",
-      "Keskin",
-      "Sulakyurt",
-      "Yahşihan"
-    ],
-    "Batman": ["Merkez", "Beşiri", "Gercüş", "Hasankeyf", "Kozluk", "Sason"],
-    "Şırnak": [
-      "Merkez",
-      "Beytüşşebap",
-      "Cizre",
-      "Güçlükonak",
-      "İdil",
-      "Silopi",
-      "Uludere"
-    ],
-    "Bartın": ["Merkez", "Amasra", "Kurucaşile", "Ulus"],
-    "Ardahan": ["Merkez", "Çıldır", "Damal", "Göle", "Hanak", "Posof"],
-    "Iğdır": ["Merkez", "Aralık", "Karakoyunlu", "Tuzluca"],
-    "Yalova": [
-      "Merkez",
-      "Altınova",
-      "Armutlu",
-      "Çiftlikköy",
-      "Çınarcık",
-      "Termal"
-    ],
-    "Karabük": [
-      "Merkez",
-      "Eflani",
-      "Eskipazar",
-      "Ovacık",
-      "Safranbolu",
-      "Yenice"
-    ],
-    "Kilis": ["Merkez", "Elbeyli", "Musabeyli", "Polateli"],
-    "Osmaniye": [
-      "Merkez",
-      "Bahçe",
-      "Düziçi",
-      "Hasanbeyli",
-      "Kadirli",
-      "Sumbas",
-      "Toprakkale"
-    ],
-    "Düzce": [
-      "Merkez",
-      "Akçakoca",
-      "Çilimli",
-      "Cumayeri",
-      "Gölyaka",
-      "Gümüşova",
-      "Kaynaşlı",
-      "Yığılca"
-    ],
-  };
-
-  List<Map<String, String>> _kullaniciSehirler = [];
-
-  Map<String, String> bugununVakitleri = {
-    "Imsak": "--:--",
-    "Gunes": "--:--",
-    "Ogle": "--:--",
-    "Ikindi": "--:--",
-    "Aksam": "--:--",
-    "Yatsi": "--:--",
-  };
-
-  String kalanSure = "00:00:00";
-  String siradakiVakit = "Yükleniyor...";
-  double ilerlemeOrani = 1.0;
-  Timer? _saniyeSayaci;
-
-  String _sonBildirimGonderilenVakit = "";
-  // Bildirim çubuğunun en son hangi vakit için gösterildiğini tutar.
-  // Sadece bu değer değiştiğinde (yani aktif vakit değiştiğinde) bildirim
-  // yeniden çizilir; böylece her saniye tekrar tekrar gösterilip
-  // titremesinin (flicker) önüne geçilir.
-  String _sonBildirimCubuguVakti = "";
-
-  bool _vakitOncesiUyari = true;
-  double _kacDakikaOnceSlider = 15.0;
-  String _bildirimSesTipi = "default";
-  bool _tamEkranUyari = false;
-  bool _bildirimCubugu = false;
-  Map<String, bool> _seciliVakitler = {
-    "Imsak": true,
-    "Gunes": true,
-    "Ogle": true,
-    "Ikindi": true,
-    "Aksam": true,
-    "Yatsi": true,
-  };
-
-  final List<String> turkiyeIlleri = [
-    "Adana",
-    "Adıyaman",
-    "Afyonkarahisar",
-    "Ağrı",
-    "Amasya",
-    "Ankara",
-    "Antalya",
-    "Artvin",
-    "Aydın",
-    "Balıkesir",
-    "Bilecik",
-    "Bingöl",
-    "Bitlis",
-    "Bolu",
-    "Burdur",
-    "Bursa",
-    "Çanakkale",
-    "Çankırı",
-    "Çorum",
-    "Denizli",
-    "Diyarbakır",
-    "Edirne",
-    "Elazığ",
-    "Erzincan",
-    "Erzurum",
-    "Eskişehir",
-    "Gaziantep",
-    "Giresun",
-    "Gümüşhane",
-    "Hakkari",
-    "Hatay",
-    "Isparta",
-    "Mersin",
-    "İstanbul",
-    "İzmir",
-    "Kars",
-    "Kastamonu",
-    "Kayseri",
-    "Kırklareli",
-    "Kırşehir",
-    "Kocaeli",
-    "Konya",
-    "Kütahya",
-    "Malatya",
-    "Manisa",
-    "Kahramanmaraş",
-    "Mardin",
-    "Muğla",
-    "Muş",
-    "Nevşehir",
-    "Niğde",
-    "Ordu",
-    "Rize",
-    "Sakarya",
-    "Samsun",
-    "Siirt",
-    "Sinop",
-    "Sivas",
-    "Tekirdağ",
-    "Tokat",
-    "Trabzon",
-    "Tunceli",
-    "Şanlıurfa",
-    "Uşak",
-    "Van",
-    "Yozgat",
-    "Zonguldak",
-    "Aksaray",
-    "Bayburt",
-    "Karaman",
-    "Kırıkkale",
-    "Batman",
-    "Şırnak",
-    "Bartın",
-    "Ardahan",
-    "Iğdır",
-    "Yalova",
-    "Karabük",
-    "Kilis",
-    "Osmaniye",
-    "Düzce"
-  ];
-
-  String? _ozelGunMesaji;
-
-  @override
-  void initState() {
-    super.initState();
-    _yukleTumAyarlar().then((_) {
-      if (secilenSehir != "Seçilmedi") {
-        ezanVakitleriniGetir();
-      }
-    });
-
-    _saniyeSayaci = Timer.periodic(const Duration(seconds: 1), (timer) {
-      sayaciGuncelle();
-      _kaydetKalanSure();
-      _ozelGunKontrol();
-    });
-
-    if (widget.bildirimIzniKaliciRed) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _bildirimIzniDialogGoster();
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _saniyeSayaci?.cancel();
-    super.dispose();
-  }
-
-  void _bildirimIzniDialogGoster() {
+  void _yeniZikirEkleDiyalog() {
+    String ad = "";
+    int hedef = 33;
     showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor:
-            widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
-        title: const Text(
-          "🔔 Bildirim İzni Gerekli",
-          style: TextStyle(color: Color(0xFFB5627A)),
+        backgroundColor: widget.isDark ? widget.themeData.cardDark : widget.themeData.cardLight,
+        title: Text(
+          "Yeni Zikir Ekle 🌸",
+          style: TextStyle(color: widget.isDark ? widget.themeData.textDark : widget.themeData.primary),
         ),
-        content: const Text(
-          "Uygulamanın namaz vakitlerini hatırlatabilmesi için bildirim izni gereklidir.\n\nLütfen Ayarlar > Uygulamalar > Ezan Vakti > Bildirimler yolunu izleyerek izni açın.",
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: const InputDecoration(labelText: "Zikir Adı"),
+              onChanged: (val) => ad = val,
+            ),
+            TextField(
+              decoration: const InputDecoration(labelText: "Özel Hedef Sayısı (Örn: 33, 99, 500)"),
+              keyboardType: TextInputType.number,
+              onChanged: (val) => hedef = int.tryParse(val) ?? 33,
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "Daha Sonra",
-              style: TextStyle(color: Color(0xFFB5627A)),
-            ),
+            child: const Text("İptal"),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              openAppSettings();
-            },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE8C4D0),
-              foregroundColor: const Color(0xFF4A2E3B),
+              backgroundColor: widget.themeData.primary,
+              foregroundColor: Colors.white,
             ),
-            child: const Text("Ayarlara Git 🌸"),
+            onPressed: () {
+              if (ad.isNotEmpty) {
+                setState(() {
+                  _zikirler.add({"ad": ad, "hedef": hedef});
+                  _seciliIndex = _zikirler.length - 1;
+                  _counter = 0;
+                });
+                _zikirleriKaydet();
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("Ekle"),
           ),
         ],
       ),
     );
   }
 
-  void _ozelGunKontrol() {
-    String? bugun = OzelGunler.bugunOzelGunVarMi();
-    if (bugun != null && _ozelGunMesaji != bugun) {
-      setState(() {
-        _ozelGunMesaji = bugun;
-      });
-      if (_bildirimCubugu) {
-        showNotification("🌸 Özel Gün!", "$bugun kutlu olsun! 🎉", sesli: true);
-      }
-    }
-  }
-
-  Future<void> _kaydetKalanSure() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('kalan_sure', kalanSure);
-    await prefs.setString('siradaki_vakit', siradakiVakit);
-  }
-
-  void _sehirEkleDiyalogunuGoster() {
-    String? yerelSecilenIl;
-    String? yerelSecilenIlce;
+  void _hedefDegistirDiyalog() {
+    int mevcutHedef = _zikirler[_seciliIndex]["hedef"] ?? 33;
+    int yeniHedef = mevcutHedef;
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateDialog) {
-          return AlertDialog(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            backgroundColor:
-                widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
-            title: const Text(
-              "🌸 Konum Ekle",
-              style: TextStyle(
-                  color: Color(0xFFB5627A), fontWeight: FontWeight.bold),
+      builder: (context) => AlertDialog(
+        backgroundColor: widget.isDark ? widget.themeData.cardDark : widget.themeData.cardLight,
+        title: Text(
+          "Hedef Sayısını Değiştir 🎯",
+          style: TextStyle(color: widget.isDark ? widget.themeData.textDark : widget.themeData.primary),
+        ),
+        content: TextField(
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: "İstediğiniz Hedef Sayı",
+            hintText: "$mevcutHedef",
+          ),
+          onChanged: (val) => yeniHedef = int.tryParse(val) ?? mevcutHedef,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("İptal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.themeData.primary,
+              foregroundColor: Colors.white,
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    labelText: "İl Seçin",
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                  ),
-                  initialValue: yerelSecilenIl,
-                  items: turkiyeIlleri.map((il) {
-                    return DropdownMenuItem(value: il, child: Text(il));
-                  }).toList(),
-                  onChanged: (value) {
-                    setStateDialog(() {
-                      yerelSecilenIl = value;
-                      yerelSecilenIlce = null;
-                    });
-                  },
-                ),
-                const SizedBox(height: 15),
-                DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    labelText: "İlçe Seçin",
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    enabled: yerelSecilenIl != null,
-                  ),
-                  initialValue: yerelSecilenIlce,
-                  items: yerelSecilenIl != null &&
-                          _ilIlceMap.containsKey(yerelSecilenIl)
-                      ? _ilIlceMap[yerelSecilenIl]!.map((ilce) {
-                          return DropdownMenuItem(
-                              value: ilce, child: Text(ilce));
-                        }).toList()
-                      : [],
-                  onChanged: (value) {
-                    setStateDialog(() {
-                      yerelSecilenIlce = value;
-                    });
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("İptal",
-                    style: TextStyle(color: Color(0xFFB5627A))),
-              ),
-              ElevatedButton(
-                onPressed: (yerelSecilenIl != null && yerelSecilenIlce != null)
-                    ? () {
-                        setState(() {
-                          _kullaniciSehirler.add({
-                            "display": "🌸 $yerelSecilenIl ($yerelSecilenIlce)",
-                            "il": yerelSecilenIl!,
-                            "ilce": yerelSecilenIlce!,
-                          });
-                          secilenSehir = yerelSecilenIl!;
-                          secilenIlce = yerelSecilenIlce!;
-                        });
-                        _kaydetTumAyarlar();
-                        ezanVakitleriniGetir();
-                        Navigator.pop(context);
-                      }
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE8C4D0),
-                  foregroundColor: const Color(0xFF4A2E3B),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                ),
-                child: const Text("Ekle 🌸"),
-              ),
-            ],
-          );
-        },
+            onPressed: () {
+              setState(() {
+                _zikirler[_seciliIndex]["hedef"] = yeniHedef;
+              });
+              _zikirleriKaydet();
+              Navigator.pop(context);
+            },
+            child: const Text("Kaydet"),
+          ),
+        ],
       ),
     );
   }
 
+  Map<String, String> _getAgacDurumu(int count) {
+    if (count < 33) {
+      return {"emoji": "🌱", "seviye": "Tohum & Filiz", "mesaj": "Her 33 zikirde tohumun serpilip büyüyecek!"};
+    } else if (count < 99) {
+      return {"emoji": "🌿", "seviye": "Genç Fidan (33+)", "mesaj": "Zikirlerinle fidanın yapraklandı!"};
+    } else if (count < 198) {
+      return {"emoji": "🪴", "seviye": "Serpilen Ağaç (99+)", "mesaj": "Ağacın dal verip güçleniyor!"};
+    } else if (count < 330) {
+      return {"emoji": "🌳", "seviye": "Büyük Yeşil Ağaç (198+)", "mesaj": "Kocaman yeşil yapraklı bir ağaç oldu!"};
+    } else if (count < 660) {
+      return {"emoji": "🌸", "seviye": "Çiçek Açan Ağaç (330+)", "mesaj": "Ağacın mis kokulu çiçeklerle donandı!"};
+    } else if (count < 999) {
+      return {"emoji": "🍎", "seviye": "Meyveli Olgun Ağaç (660+)", "mesaj": "Ağacın nefis meyveler verdi!"};
+    } else {
+      return {"emoji": "👑🌳🍎", "seviye": "1000 Zikir Muhteşem Dev Ağaç", "mesaj": "Tebrikler! 1000 zikre ulaştın ve en büyük ağaca eriştin!"};
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.themeData;
+    final isDark = widget.isDark;
+    final mevcutzikir = _zikirler.isNotEmpty ? _zikirler[_seciliIndex] : {"ad": "Zikir", "hedef": 33};
+    final int hedefSayi = mevcutzikir["hedef"] ?? 33;
+    final agac = _getAgacDurumu(_counter);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        children: [
+          IosGlassCard(
+            isDark: isDark,
+            themeData: theme,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "İlerleme Durumu",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? theme.textDark : theme.primary,
+                      ),
+                    ),
+                    Text(
+                      "Zikir Sayısı: $_counter",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? theme.textDark : theme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                LinearProgressIndicator(
+                  value: (hedefSayi > 0) ? (_counter / hedefSayi.toDouble()).clamp(0.0, 1.0) : 0.0,
+                  backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                  color: theme.primary,
+                  minHeight: 12,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  agac["emoji"]!,
+                  style: const TextStyle(fontSize: 54),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  agac["seviye"]!,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? theme.textDark : theme.primary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  agac["mesaj"]!,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          IosGlassCard(
+            isDark: isDark,
+            themeData: theme,
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    DropdownButton<int>(
+                      value: _seciliIndex < _zikirler.length ? _seciliIndex : 0,
+                      dropdownColor: isDark ? theme.cardDark : theme.cardLight,
+                      items: List.generate(_zikirler.length, (idx) {
+                        return DropdownMenuItem(
+                          value: idx,
+                          child: Text(
+                            _zikirler[idx]["ad"],
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? theme.textDark : theme.primary,
+                            ),
+                          ),
+                        );
+                      }),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _seciliIndex = val;
+                            _counter = 0;
+                          });
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                      onPressed: _yeniZikirEkleDiyalog,
+                      tooltip: "Yeni Zikir Ekle",
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "$_counter",
+                  style: TextStyle(
+                    fontSize: 64,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? theme.textDark : theme.primary,
+                  ),
+                ),
+                InkWell(
+                  onTap: _hedefDegistirDiyalog,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: theme.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: theme.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "Hedef: $hedefSayi",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? theme.textDark : theme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(Icons.edit, size: 16, color: theme.primary),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    setState(() {
+                      _counter++;
+                      _toplamZikirSayisi++;
+                    });
+                    _zikirleriKaydet();
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 100),
+                    width: 130,
+                    height: 130,
+                    decoration: BoxDecoration(
+                      color: theme.primary,
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          theme.secondary,
+                          theme.primary,
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.primary.withValues(alpha: 0.5),
+                          blurRadius: 25,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.touch_app, color: Colors.white, size: 38),
+                          const SizedBox(height: 4),
+                          Text(
+                            mevcutzikir["ad"],
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.bookmark_add, size: 18),
+                      label: const Text("Deftere Kaydet"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: _zikriDeftereKaydet,
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.refresh, color: Colors.red, size: 18),
+                      label: const Text("Sıfırla", style: TextStyle(color: Colors.red)),
+                      onPressed: () {
+                        setState(() => _counter = 0);
+                      },
+                    ),
+                    if (_zikirler.length > 1) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.grey, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _zikirler.removeAt(_seciliIndex);
+                            _seciliIndex = 0;
+                            _counter = 0;
+                          });
+                          _zikirleriKaydet();
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (_zikirDefteri.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            IosGlassCard(
+              isDark: isDark,
+              themeData: theme,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "📖 Zikir Defterim & Kayıtlarım",
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? theme.textDark : theme.primary,
+                    ),
+                  ),
+                  const Divider(),
+                  ..._zikirDefteri.take(6).map((log) {
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Text(log["agac"] ?? "🌳", style: const TextStyle(fontSize: 24)),
+                      title: Text(
+                        "${log['zikir']} - ${log['sayi']} Adet",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      subtitle: Text(log['tarih'] ?? ""),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== EZAN VAKTİ APP (MAIN WORKER) ====================
+class EzanVaktiApp extends StatefulWidget {
+  final AppThemeMode currentTheme;
+  final bool isDarkMode;
+  final double fontScale;
+  final Function(AppThemeMode, bool) onThemeChanged;
+  final Function(double) onFontScaleChanged;
+  final VoidCallback onOpenOnboarding;
+
+  const EzanVaktiApp({
+    super.key,
+    required this.currentTheme,
+    required this.isDarkMode,
+    required this.fontScale,
+    required this.onThemeChanged,
+    required this.onFontScaleChanged,
+    required this.onOpenOnboarding,
+  });
+
+  @override
+  State<EzanVaktiApp> createState() => _EzanVaktiAppState();
+}
+
+class _EzanVaktiAppState extends State<EzanVaktiApp> {
+  int _aktifSayfaIndex = 0;
+  String kalanSure = "00:00:00";
+  String siradakiVakit = "Yükleniyor...";
+  double ilerlemeOrani = 0.0;
+  bool isLoading = true;
+
+  String secilenSehir = "İstanbul";
+  String secilenIlce = "Kadıköy";
+  List<String> kayitliSehirler = ["İstanbul (Kadıköy)", "Malatya (Yeşilyurt)", "Ankara (Çankaya)"];
+
+  Map<String, String> bugununVakitleri = {
+    "İmsak": "--:--",
+    "Güneş": "--:--",
+    "Öğle": "--:--",
+    "İkindi": "--:--",
+    "Akşam": "--:--",
+    "Yatsı": "--:--",
+  };
+
+  Timer? _timer;
+  bool _vakitOncesiUyari = true;
+  double _kacDakikaOnceSlider = 15.0;
+  bool _bildirimCubugu = true;
+  bool _bildirimDuaHadisEkle = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _yukleTumAyarlar().then((_) {
+      ezanVakitleriniGetir();
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        _hesaplaKalanSure();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   Future<void> ezanVakitleriniGetir() async {
-    if (secilenSehir == "Seçilmedi") return;
-    if (!mounted) return;
     setState(() => isLoading = true);
     try {
-      String city = secilenIlce != "Merkez" ? secilenIlce : secilenSehir;
-      final response = await http
-          .get(
-            Uri.parse(
-              'https://api.aladhan.com/v1/calendarByCity?city=$city&country=Turkey&method=13',
-            ),
-          )
-          .timeout(const Duration(seconds: 10));
+      final uri = Uri.parse(
+        'https://ezanvakti.herokuapp.com/vakitler?ilce=$secilenIlce',
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+
       if (response.statusCode == 200) {
-        final decodedData = json.decode(response.body);
-        if (decodedData['data'] != null && decodedData['data'].isNotEmpty) {
-          aylikVeriHavuzu = decodedData['data'];
-          bugununVerileriniAyristir();
+        final List<dynamic> data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
+          final bugunData = data[0];
+          setState(() {
+            bugununVakitleri = {
+              "İmsak": bugunData["Imsak"] ?? "--:--",
+              "Güneş": bugunData["Gunes"] ?? "--:--",
+              "Öğle": bugunData["Ogle"] ?? "--:--",
+              "İkindi": bugunData["Ikindi"] ?? "--:--",
+              "Akşam": bugunData["Aksam"] ?? "--:--",
+              "Yatsı": bugunData["Yatsi"] ?? "--:--",
+            };
+            isLoading = false;
+          });
+          _hesaplaKalanSure();
+          return;
         }
       }
     } catch (e) {
-      debugPrint("Bağlantı hatası: $e");
-    } finally {
-      if (mounted) setState(() => isLoading = false);
+      debugPrint("API Vakit getirme hatası: $e");
     }
+
+    setState(() {
+      bugununVakitleri = {
+        "İmsak": "04:20",
+        "Güneş": "05:55",
+        "Öğle": "13:12",
+        "İkindi": "17:00",
+        "Akşam": "20:18",
+        "Yatsı": "21:45",
+      };
+      isLoading = false;
+    });
+    _hesaplaKalanSure();
   }
 
-  void bugununVerileriniAyristir() {
-    if (aylikVeriHavuzu.isEmpty) return;
-    int bugunIndex = DateTime.now().day - 1;
-    if (bugunIndex >= aylikVeriHavuzu.length || bugunIndex < 0) bugunIndex = 0;
-    final timings = aylikVeriHavuzu[bugunIndex]['timings'];
-    if (mounted) {
-      setState(() {
-        bugununVakitleri = {
-          "Imsak": temizleZaman(timings['Fajr']),
-          "Gunes": temizleZaman(timings['Sunrise']),
-          "Ogle": temizleZaman(timings['Dhuhr']),
-          "Ikindi": temizleZaman(timings['Asr']),
-          "Aksam": temizleZaman(timings['Maghrib']),
-          "Yatsi": temizleZaman(timings['Isha']),
-        };
-      });
-    }
-    _schedulePrayerNotificationsIfReady();
-    sayaciGuncelle();
-  }
-
-  void _schedulePrayerNotificationsIfReady() {
-    if (bugununVakitleri.values.any((v) => v == "--:--")) return;
-    schedulePrayerNotifications(bugununVakitleri);
-  }
-
-  String temizleZaman(String? v) {
-    if (v == null) return "--:--";
-    final match = RegExp(r'(\d{2}:\d{2})').firstMatch(v);
-    return match != null ? match.group(0)! : "--:--";
-  }
-
-  void sayaciGuncelle() {
-    if (bugununVakitleri.values.any((v) => v == "--:--")) return;
+  void _hesaplaKalanSure() {
     final simdi = DateTime.now();
-    final imsakTime = parseTime(bugununVakitleri["Imsak"]!);
-    final gunesTime = parseTime(bugununVakitleri["Gunes"]!);
-    final ogleTime = parseTime(bugununVakitleri["Ogle"]!);
-    final ikindiTime = parseTime(bugununVakitleri["Ikindi"]!);
-    final aksamTime = parseTime(bugununVakitleri["Aksam"]!);
-    final yatsiTime = parseTime(bugununVakitleri["Yatsi"]!);
+    DateTime? enYakinVakit;
+    String vakitIsmi = "";
+    DateTime? oncekiVakit;
 
-    DateTime hedeflenenVakit;
-    DateTime baslangicTime;
-    String vakitIsmi;
+    Map<String, DateTime> vakitDateTimes = {};
+    bugununVakitleri.forEach((key, value) {
+      if (value != "--:--") {
+        vakitDateTimes[key] = parseTime(value);
+      }
+    });
 
-    if (simdi.isBefore(imsakTime)) {
-      hedeflenenVakit = imsakTime;
-      baslangicTime = yatsiTime.subtract(const Duration(days: 1));
-      vakitIsmi = "Imsak";
-    } else if (simdi.isBefore(gunesTime)) {
-      hedeflenenVakit = gunesTime;
-      baslangicTime = imsakTime;
-      vakitIsmi = "Gunes";
-    } else if (simdi.isBefore(ogleTime)) {
-      hedeflenenVakit = ogleTime;
-      baslangicTime = gunesTime;
-      vakitIsmi = "Ogle";
-    } else if (simdi.isBefore(ikindiTime)) {
-      hedeflenenVakit = ikindiTime;
-      baslangicTime = ogleTime;
-      vakitIsmi = "Ikindi";
-    } else if (simdi.isBefore(aksamTime)) {
-      hedeflenenVakit = aksamTime;
-      baslangicTime = ikindiTime;
-      vakitIsmi = "Aksam";
-    } else if (simdi.isBefore(yatsiTime)) {
-      hedeflenenVakit = yatsiTime;
-      baslangicTime = aksamTime;
-      vakitIsmi = "Yatsi";
-    } else {
-      hedeflenenVakit = imsakTime.add(const Duration(days: 1));
-      baslangicTime = yatsiTime;
-      vakitIsmi = "Imsak";
-    }
+    List<MapEntry<String, DateTime>> siraliVakitler =
+        vakitDateTimes.entries.toList()
+          ..sort((a, b) => a.value.compareTo(b.value));
 
-    final toplamSure = hedeflenenVakit.difference(baslangicTime);
-    final kalanSureDuration = hedeflenenVakit.difference(simdi);
-
-    if (_vakitOncesiUyari) {
-      int erkenUyariDakikasi = _kacDakikaOnceSlider.toInt();
-      if (kalanSureDuration.inMinutes == erkenUyariDakikasi &&
-          kalanSureDuration.inSeconds % 60 == 0) {
-        String uyariKey = "${vakitIsmi}_uyari_${simdi.day}";
-        if (_sonBildirimGonderilenVakit != uyariKey) {
-          _sonBildirimGonderilenVakit = uyariKey;
-          showNotification(
-            "⏰ Vakit Yaklaşıyor 🌸",
-            "$vakitIsmi vaktine $erkenUyariDakikasi dakika kaldı.",
-          );
-        }
+    for (int i = 0; i < siraliVakitler.length; i++) {
+      if (siraliVakitler[i].value.isAfter(simdi)) {
+        enYakinVakit = siraliVakitler[i].value;
+        vakitIsmi = siraliVakitler[i].key;
+        oncekiVakit = i == 0
+            ? siraliVakitler.last.value.subtract(const Duration(days: 1))
+            : siraliVakitler[i - 1].value;
+        break;
       }
     }
 
-    if (kalanSureDuration.inSeconds <= 0) {
-      String vakitGeldiKey = "${vakitIsmi}_geldi_${simdi.day}";
-      if (_seciliVakitler[vakitIsmi] == true &&
-          _sonBildirimGonderilenVakit != vakitGeldiKey) {
-        _sonBildirimGonderilenVakit = vakitGeldiKey;
-        bool sesli = _bildirimSesTipi != "silent";
-        showNotification(
-          "🕌 $vakitIsmi Vakti Geldi 🌸",
-          "$vakitIsmi ezanı okunuyor.",
-          sesli: sesli,
-        );
-        if (_tamEkranUyari && mounted) {
-          _tamEkranUyariGoster(vakitIsmi);
-        }
-      }
+    if (enYakinVakit == null && siraliVakitler.isNotEmpty) {
+      enYakinVakit = siraliVakitler.first.value.add(const Duration(days: 1));
+      vakitIsmi = siraliVakitler.first.key;
+      oncekiVakit = siraliVakitler.last.value;
     }
+
+    if (enYakinVakit == null || oncekiVakit == null) return;
+
+    Duration kalanSureDuration = enYakinVakit.difference(simdi);
+    Duration toplamSure = enYakinVakit.difference(oncekiVakit);
 
     if (mounted) {
       setState(() {
@@ -3769,65 +1853,10 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
             "${kalanSureDuration.inHours.toString().padLeft(2, '0')}:${(kalanSureDuration.inMinutes % 60).toString().padLeft(2, '0')}:${(kalanSureDuration.inSeconds % 60).toString().padLeft(2, '0')}";
       });
 
-      // Bildirim çubuğunu SADECE aktif vakit değiştiğinde güncelle.
-      // (Önceki hâlde saniye her değiştiğinde -yani pratikte her tick'te-
-      // yeniden çiziliyordu, bu da bildirimin "bi açılıp bi kapanmasına" /
-      // titremesine sebep oluyordu.)
-      if (vakitIsmi != _sonBildirimCubuguVakti) {
-        _sonBildirimCubuguVakti = vakitIsmi;
-        _bildirimCubuguGuncelle();
+      if (_bildirimCubugu) {
+        updateVakitBilgiCubugu(bugununVakitleri);
       }
-      _kaydetKalanSure();
     }
-  }
-
-  void _bildirimCubuguGuncelle() async {
-    if (_bildirimCubugu) {
-      await updateVakitBilgiCubugu(bugununVakitleri);
-    } else {
-      await cancelNotification();
-    }
-  }
-
-  void _tamEkranUyariGoster(String vakitAdi) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => AlertDialog(
-        backgroundColor:
-            widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.alarm, size: 80, color: Color(0xFFE8C4D0)),
-            const SizedBox(height: 16),
-            Text(
-              "$vakitAdi Vakti Geldi! 🌸",
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFB5627A),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              "Namazınızı kılmayı unutmayın.",
-              style: TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE8C4D0),
-                foregroundColor: const Color(0xFF4A2E3B),
-              ),
-              child: const Text("Tamam 🌷"),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   DateTime parseTime(String timeStr) {
@@ -3846,13 +1875,11 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('vakit_oncesi_uyari', _vakitOncesiUyari);
     await prefs.setDouble('kac_dakika_once_slider', _kacDakikaOnceSlider);
-    await prefs.setString('bildirim_ses_tipi', _bildirimSesTipi);
-    await prefs.setBool('tam_ekran_uyari', _tamEkranUyari);
     await prefs.setBool('bildirim_cubugu', _bildirimCubugu);
+    await prefs.setBool('bildirim_dua_hadis_ekle', _bildirimDuaHadisEkle);
     await prefs.setString('secilen_sehir', secilenSehir);
     await prefs.setString('secilen_ilce', secilenIlce);
-    await prefs.setString('secili_vakitler', jsonEncode(_seciliVakitler));
-    await prefs.setString('kullanici_sehirler', jsonEncode(_kullaniciSehirler));
+    await prefs.setStringList('kayitli_sehirler', kayitliSehirler);
   }
 
   Future<void> _yukleTumAyarlar() async {
@@ -3860,34 +1887,172 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
     setState(() {
       _vakitOncesiUyari = prefs.getBool('vakit_oncesi_uyari') ?? true;
       _kacDakikaOnceSlider = prefs.getDouble('kac_dakika_once_slider') ?? 15.0;
-      _bildirimSesTipi = prefs.getString('bildirim_ses_tipi') ?? "default";
-      _tamEkranUyari = prefs.getBool('tam_ekran_uyari') ?? false;
-      _bildirimCubugu = prefs.getBool('bildirim_cubugu') ?? false;
-      secilenSehir = prefs.getString('secilen_sehir') ?? "Seçilmedi";
-      secilenIlce = prefs.getString('secilen_ilce') ?? "Seçilmedi";
-
-      String? seciliVakitlerJson = prefs.getString('secili_vakitler');
-      if (seciliVakitlerJson != null) {
-        Map<String, dynamic> json = jsonDecode(seciliVakitlerJson);
-        _seciliVakitler = json.map((k, v) => MapEntry(k, v as bool));
-      }
-      String? kullaniciSehirlerJson = prefs.getString('kullanici_sehirler');
-      if (kullaniciSehirlerJson != null) {
-        List<dynamic> json = jsonDecode(kullaniciSehirlerJson);
-        _kullaniciSehirler =
-            json.map((e) => Map<String, String>.from(e)).toList();
-      }
+      _bildirimCubugu = prefs.getBool('bildirim_cubugu') ?? true;
+      _bildirimDuaHadisEkle = prefs.getBool('bildirim_dua_hadis_ekle') ?? true;
+      secilenSehir = prefs.getString('secilen_sehir') ?? "İstanbul";
+      secilenIlce = prefs.getString('secilen_ilce') ?? "Kadıköy";
+      kayitliSehirler = prefs.getStringList('kayitli_sehirler') ?? ["İstanbul (Kadıköy)", "Malatya (Yeşilyurt)", "Ankara (Çankaya)"];
     });
   }
 
+  void _sehirVeIlceSecimiDiyalog() {
+    String tempIl = secilenSehir;
+    String tempIlce = secilenIlce;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDiyalogState) {
+            final ilceler = TurkiyeSehirler.getIlceler(tempIl);
+            if (!ilceler.contains(tempIlce)) {
+              tempIlce = ilceler.first;
+            }
+
+            final theme = AppThemeData.getTheme(widget.currentTheme);
+            final isDark = widget.isDarkMode;
+
+            return AlertDialog(
+              backgroundColor: isDark ? theme.cardDark : theme.cardLight,
+              title: Text(
+                "81 İl & İlçe Yönetimi 📍",
+                style: TextStyle(color: isDark ? theme.textDark : theme.primary),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("İl Seçin (81 İl):", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? theme.textDark : theme.primary)),
+                    const SizedBox(height: 6),
+                    DropdownButton<String>(
+                      isExpanded: true,
+                      value: tempIl,
+                      dropdownColor: isDark ? theme.cardDark : theme.cardLight,
+                      items: TurkiyeSehirler.iller.map((il) {
+                        return DropdownMenuItem(
+                          value: il,
+                          child: Text(il, style: TextStyle(color: isDark ? theme.textDark : theme.primary)),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDiyalogState(() {
+                            tempIl = val;
+                            tempIlce = TurkiyeSehirler.getIlceler(val).first;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Text("İlçe Seçin:", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? theme.textDark : theme.primary)),
+                    const SizedBox(height: 6),
+                    DropdownButton<String>(
+                      isExpanded: true,
+                      value: tempIlce,
+                      dropdownColor: isDark ? theme.cardDark : theme.cardLight,
+                      items: ilceler.map((ilce) {
+                        return DropdownMenuItem(
+                          value: ilce,
+                          child: Text(ilce, style: TextStyle(color: isDark ? theme.textDark : theme.primary)),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDiyalogState(() {
+                            tempIlce = val;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.push_pin),
+                      label: const Text("Bu Konumu Sabitle (Ana Şehir)"),
+                      onPressed: () {
+                        setState(() {
+                          secilenSehir = tempIl;
+                          secilenIlce = tempIlce;
+                          String entry = "$tempIl ($tempIlce)";
+                          if (!kayitliSehirler.contains(entry)) {
+                            kayitliSehirler.add(entry);
+                          }
+                        });
+                        _kaydetTumAyarlar();
+                        ezanVakitleriniGetir();
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const Divider(height: 24),
+                    Text("Kayıtlı Konumlarınız:", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? theme.textDark : theme.primary)),
+                    ...kayitliSehirler.map((item) {
+                      bool isCurrent = item.contains(secilenSehir);
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          item,
+                          style: TextStyle(
+                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                            color: isDark ? theme.textDark : theme.primary,
+                          ),
+                        ),
+                        leading: Icon(isCurrent ? Icons.push_pin : Icons.location_city, color: theme.primary),
+                        trailing: kayitliSehirler.length > 1
+                            ? IconButton(
+                                icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                                onPressed: () {
+                                  setDiyalogState(() {
+                                    kayitliSehirler.remove(item);
+                                  });
+                                  _kaydetTumAyarlar();
+                                },
+                              )
+                            : null,
+                        onTap: () {
+                          List<String> parts = item.replaceAll(")", "").split(" (");
+                          if (parts.length == 2) {
+                            setState(() {
+                              secilenSehir = parts[0];
+                              secilenIlce = parts[1];
+                            });
+                            _kaydetTumAyarlar();
+                            ezanVakitleriniGetir();
+                            Navigator.pop(context);
+                          }
+                        },
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Kapat"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _ayarlarMenusunuAc() {
+    final theme = AppThemeData.getTheme(widget.currentTheme);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor:
-          widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
+      backgroundColor: widget.isDarkMode ? theme.backgroundDark : theme.backgroundLight,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -3900,253 +2065,130 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                 return SingleChildScrollView(
                   controller: scrollController,
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(22),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "🌸 Uygulama Ayarları",
-                          style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFB5627A)),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "🌸 Ayarlar",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: widget.isDarkMode ? theme.textDark : theme.primary,
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.close, color: theme.primary),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
                         ),
-                        const Divider(color: Color(0xFFE8C4D0)),
+                        const Divider(),
+                        const SizedBox(height: 10),
+
                         Text(
-                            "🔤 Yazı Boyutu: %${(widget.yaziBoyutuOlcegi * 100).round()}",
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        Slider(
-                          value: widget.yaziBoyutuOlcegi,
-                          min: 0.9,
-                          max: 1.3,
-                          divisions: 8,
-                          activeColor: const Color(0xFFB5627A),
-                          label: "%${(widget.yaziBoyutuOlcegi * 100).round()}",
+                          "Temalar 🎨",
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDarkMode ? theme.textDark : theme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: AppThemeMode.values.map((tMode) {
+                              final tData = AppThemeData.getTheme(tMode);
+                              final isSelected = widget.currentTheme == tMode;
+
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: ChoiceChip(
+                                  label: Text(tData.name),
+                                  selected: isSelected,
+                                  selectedColor: tData.primary.withValues(alpha: 0.4),
+                                  onSelected: (val) {
+                                    if (val) {
+                                      widget.onThemeChanged(tMode, widget.isDarkMode);
+                                      setModalState(() {});
+                                    }
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SwitchListTile(
+                          title: Text("🌙 Gece Modu (Koyu Tema)", style: TextStyle(color: widget.isDarkMode ? theme.textDark : theme.primary)),
+                          subtitle: const Text("Tüm kutucukları ve arka planı karanlık renklere bürür"),
+                          value: widget.isDarkMode,
                           onChanged: (val) {
-                            widget.onYaziBoyutuChanged(val);
+                            widget.onThemeChanged(widget.currentTheme, val);
                             setModalState(() {});
                           },
                         ),
-                        const Divider(color: Color(0xFFE8C4D0)),
-                        SwitchListTile(
-                          title: const Text(
-                              "🌷 Vaktinden önce uyarılmak istiyor musun?"),
-                          value: _vakitOncesiUyari,
+                        const Divider(),
+
+                        Text(
+                          "🔤 Yazı Boyutu (Font Ölçeği)",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDarkMode ? theme.textDark : theme.primary,
+                          ),
+                        ),
+                        Slider(
+                          value: widget.fontScale,
+                          min: 0.85,
+                          max: 1.30,
+                          divisions: 3,
+                          activeColor: theme.primary,
                           onChanged: (val) {
-                            setModalState(() => _vakitOncesiUyari = val);
-                            setState(() => _vakitOncesiUyari = val);
-                            _kaydetTumAyarlar();
+                            widget.onFontScaleChanged(val);
+                            setModalState(() {});
                           },
-                          activeThumbColor: const Color(0xFFB5627A),
                         ),
-                        if (_vakitOncesiUyari) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text("Hatırlatma Süresi:",
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                                Text(
-                                  "${_kacDakikaOnceSlider.toInt()} dakika önce",
-                                  style: const TextStyle(
-                                      color: Color(0xFFB5627A),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Slider(
-                            value: _kacDakikaOnceSlider,
-                            min: 1.0,
-                            max: 60.0,
-                            divisions: 59,
-                            activeColor: const Color(0xFFB5627A),
-                            inactiveColor: const Color(0xFFE8C4D0),
-                            label: "${_kacDakikaOnceSlider.toInt()} dk",
-                            onChanged: (double value) {
-                              setModalState(() => _kacDakikaOnceSlider = value);
-                              setState(() => _kacDakikaOnceSlider = value);
-                              _kaydetTumAyarlar();
-                            },
-                          ),
-                        ],
-                        const SizedBox(height: 10),
-                        const Text("Bildirim kurulacak vakitleri seçin:",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFB5627A))),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: _seciliVakitler.keys.map((vakit) {
-                            return FilterChip(
-                              label: Text(vakit),
-                              selected: _seciliVakitler[vakit]!,
-                              onSelected: (val) {
-                                setModalState(
-                                    () => _seciliVakitler[vakit] = val);
-                                setState(() => _seciliVakitler[vakit] = val);
-                                _kaydetTumAyarlar();
-                              },
-                              selectedColor: const Color(0xFFE8C4D0),
-                              checkmarkColor: const Color(0xFFB5627A),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 10),
+                        const Divider(),
+
                         SwitchListTile(
-                          title: const Text("🦋 Tam Ekran Uyarı"),
-                          subtitle: const Text(
-                              "Ekran kapalı/açık olsa da tam uyarı metni kaplasın"),
-                          value: _tamEkranUyari,
-                          onChanged: (val) {
-                            setModalState(() => _tamEkranUyari = val);
-                            setState(() => _tamEkranUyari = val);
-                            _kaydetTumAyarlar();
-                          },
-                          activeThumbColor: const Color(0xFFB5627A),
-                        ),
-                        if (_tamEkranUyari)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.play_arrow),
-                              label: const Text("Uyarıyı Test Et 🌸"),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFE8C4D0),
-                                foregroundColor: const Color(0xFF4A2E3B),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20)),
-                              ),
-                              onPressed: () => _tamEkranUyariGoster("Test"),
-                            ),
-                          ),
-                        const SizedBox(height: 10),
-                        SwitchListTile(
-                          title: const Text("🌼 Vakit Bilgi Çubuğu"),
-                          subtitle: const Text(
-                              "Bildirim çubuğunda bugünün tüm vakitleri gösterilsin"),
+                          title: Text("Sabit Vakit Bilgi Çubuğu", style: TextStyle(color: widget.isDarkMode ? theme.textDark : theme.primary)),
+                          subtitle: const Text("Namaz vakitleri çubukta gösterilsin"),
                           value: _bildirimCubugu,
                           onChanged: (val) async {
                             setModalState(() => _bildirimCubugu = val);
                             setState(() => _bildirimCubugu = val);
                             _kaydetTumAyarlar();
-
                             if (val) {
-                              _bildirimCubuguGuncelle();
+                              updateVakitBilgiCubugu(bugununVakitleri);
                             } else {
                               await cancelNotification();
                             }
                           },
-                          activeThumbColor: const Color(0xFFB5627A),
                         ),
                         SwitchListTile(
-                          title: const Text("🌙 Gece Modu"),
-                          subtitle: const Text("Koyu tema kullan"),
-                          value: widget.isDarkMode,
+                          title: Text("Bildirimlerde Dua / Hadis Göster", style: TextStyle(color: widget.isDarkMode ? theme.textDark : theme.primary)),
+                          value: _bildirimDuaHadisEkle,
                           onChanged: (val) {
-                            setModalState(() => widget.onThemeChanged(val));
+                            setModalState(() => _bildirimDuaHadisEkle = val);
+                            setState(() => _bildirimDuaHadisEkle = val);
                             _kaydetTumAyarlar();
                           },
-                          activeThumbColor: const Color(0xFFB5627A),
                         ),
-                        const SizedBox(height: 10),
-                        const Text("🏙️ Şehir / İlçe Listem",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFB5627A))),
-                        const SizedBox(height: 5),
-                        _kullaniciSehirler.isEmpty
-                            ? const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 10),
-                                child: Text(
-                                    "Henüz hiç şehir eklemediniz. Lütfen 'Yeni Ekle' butonunu kullanın. 🌷",
-                                    style: TextStyle(
-                                        fontSize: 13, color: Colors.grey)),
-                              )
-                            : Column(
-                                children: _kullaniciSehirler.map((sehir) {
-                                  return ListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(sehir["display"]!),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.delete_outline,
-                                          color: Colors.red, size: 22),
-                                      onPressed: () {
-                                        setModalState(() {
-                                          _kullaniciSehirler.remove(sehir);
-                                        });
-                                        setState(() {
-                                          _kullaniciSehirler.remove(sehir);
-                                        });
-                                        _kaydetTumAyarlar();
-                                        if (_kullaniciSehirler.isNotEmpty) {
-                                          final son = _kullaniciSehirler.last;
-                                          secilenSehir = son["il"]!;
-                                          secilenIlce = son["ilce"]!;
-                                          ezanVakitleriniGetir();
-                                        } else {
-                                          secilenSehir = "Seçilmedi";
-                                          secilenIlce = "Seçilmedi";
-                                          setState(() {
-                                            bugununVakitleri = {
-                                              "Imsak": "--:--",
-                                              "Gunes": "--:--",
-                                              "Ogle": "--:--",
-                                              "Ikindi": "--:--",
-                                              "Aksam": "--:--",
-                                              "Yatsi": "--:--",
-                                            };
-                                          });
-                                        }
-                                      },
-                                    ),
-                                    onTap: () {
-                                      setState(() {
-                                        secilenSehir = sehir["il"]!;
-                                        secilenIlce = sehir["ilce"]!;
-                                      });
-                                      ezanVakitleriniGetir();
-                                      _kaydetTumAyarlar();
-                                      Navigator.pop(context);
-                                    },
-                                  );
-                                }).toList(),
-                              ),
-                        const SizedBox(height: 15),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                "Aktif Konum: $secilenSehir ($secilenIlce)",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: widget.isDarkMode
-                                        ? Colors.white70
-                                        : Colors.black87),
-                              ),
-                            ),
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.add_circle,
-                                  color: Color(0xFFB5627A)),
-                              label: const Text("Yeni Ekle"),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFE8C4D0),
-                                foregroundColor: const Color(0xFF4A2E3B),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16)),
-                              ),
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _sehirEkleDiyalogunuGoster();
-                              },
-                            ),
-                          ],
+                        const Divider(),
+
+                        ListTile(
+                          title: Text("📍 Konum ve 81 İl/İlçe Yönetimi", style: TextStyle(color: widget.isDarkMode ? theme.textDark : theme.primary)),
+                          subtitle: Text("$secilenSehir ($secilenIlce)"),
+                          trailing: Icon(Icons.edit_location_alt, color: theme.primary),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _sehirVeIlceSecimiDiyalog();
+                          },
                         ),
                         const SizedBox(height: 20),
                       ],
@@ -4163,104 +2205,81 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 800;
+    final theme = AppThemeData.getTheme(widget.currentTheme);
+    final isDark = widget.isDarkMode;
 
     return Scaffold(
-      body: FlowerBackground(
-        isDark: widget.isDarkMode,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark ? theme.bgGradientDark : theme.bgGradientLight,
+          ),
+        ),
         child: SafeArea(
           child: Column(
             children: [
+              // HEADER BAR
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: widget.isDarkMode
-                        ? [
-                            const Color(0xFF2D1B2E).withValues(alpha: 0.7),
-                            const Color(0xFF1A1118).withValues(alpha: 0.5)
-                          ]
-                        : [
-                            Colors.white.withValues(alpha: 0.6),
-                            const Color(0xFFFDF0F2).withValues(alpha: 0.3)
-                          ],
+                  color: isDark ? theme.cardDark.withValues(alpha: 0.9) : theme.cardLight.withValues(alpha: 0.9),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isDark ? Colors.white12 : theme.primary.withValues(alpha: 0.2),
+                    ),
                   ),
-                  borderRadius:
-                      const BorderRadius.vertical(bottom: Radius.circular(20)),
                 ),
                 child: Row(
                   children: [
                     Expanded(
-                      child: Row(
-                        children: [
-                          const Icon(Icons.local_florist,
-                              color: Color(0xFFB5627A), size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              "$secilenSehir ($secilenIlce)",
-                              style: TextStyle(
-                                fontSize: isDesktop ? 18 : 15,
-                                fontWeight: FontWeight.w600,
-                                color: widget.isDarkMode
-                                    ? const Color(0xFFF5B7B7)
-                                    : const Color(0xFFB5627A),
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          _sehirVeIlceSecimiDiyalog();
+                        },
+                        child: Row(
+                          children: [
+                            Icon(Icons.location_on, color: theme.primary, size: 20),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                "$secilenSehir ($secilenIlce)",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? theme.textDark : theme.textLight,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Container(
-                              width: 1,
-                              height: 18,
-                              color: widget.isDarkMode
-                                  ? Colors.white24
-                                  : Colors.grey.shade300),
-                          const SizedBox(width: 12),
-                          Text(
-                            DateFormat('d MMMM yyyy', 'tr_TR')
-                                .format(DateTime.now()),
-                            style: TextStyle(
-                                fontSize: isDesktop ? 16 : 13,
-                                color: widget.isDarkMode
-                                    ? Colors.white54
-                                    : Colors.grey.shade600),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat('d MMMM yyyy', 'tr_TR').format(DateTime.now()),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: widget.isDarkMode
-                            ? const Color(0xFF3D1F3A).withValues(alpha: 0.8)
-                            : const Color(0xFFE8C4D0).withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: widget.isDarkMode
-                                ? const Color(0xFFF5B7B7).withValues(alpha: 0.3)
-                                : const Color(0xFFB5627A)
-                                    .withValues(alpha: 0.3),
-                            width: 2),
-                      ),
-                      child: IconButton(
-                        icon: Icon(Icons.settings,
-                            color: widget.isDarkMode
-                                ? const Color(0xFFF5B7B7)
-                                : const Color(0xFFB5627A),
-                            size: 28),
-                        onPressed: _ayarlarMenusunuAc,
-                      ),
+                    IconButton(
+                      icon: Icon(Icons.settings, color: theme.primary),
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        _ayarlarMenusunuAc();
+                      },
                     ),
                   ],
                 ),
               ),
+
               Expanded(
                 child: isLoading
-                    ? const Center(
-                        child:
-                            CircularProgressIndicator(color: Color(0xFFB5627A)))
+                    ? Center(child: CircularProgressIndicator(color: theme.primary))
                     : IndexedStack(
                         index: _aktifSayfaIndex,
                         children: [
@@ -4268,60 +2287,81 @@ class _AnaSayfaGezginiState extends State<AnaSayfaGezgini> {
                             kalanSure: kalanSure,
                             siradakiVakit: siradakiVakit,
                             ilerlemeOrani: ilerlemeOrani,
-                            isDark: widget.isDarkMode,
-                            ozelGunMesaji: _ozelGunMesaji,
+                            isDark: isDark,
+                            themeData: theme,
+                            bugununVakitleri: bugununVakitleri,
                           ),
                           VakitlerListeSayfasi(
                             bugununVakitleri: bugununVakitleri,
                             aktifVakit: siradakiVakit,
-                            isDark: widget.isDarkMode,
-                            ozelGunMesaji: _ozelGunMesaji,
+                            isDark: isDark,
+                            themeData: theme,
                           ),
-                          KuranWebView(isDark: widget.isDarkMode),
-                          KiblePusulasi(isDark: widget.isDarkMode),
-                          ZikirmatikSayfasi(isDark: widget.isDarkMode),
+                          KuranWebView(isDark: isDark),
+                          KibleWebView(isDark: isDark, themeData: theme),
+                          ZikirmatikPage(isDark: isDark, themeData: theme),
                         ],
                       ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _aktifSayfaIndex,
-        onTap: (index) => setState(() => _aktifSayfaIndex = index),
-        backgroundColor:
-            widget.isDarkMode ? const Color(0xFF2D1B2E) : Colors.white,
-        selectedItemColor: const Color(0xFFB5627A),
-        unselectedItemColor:
-            widget.isDarkMode ? Colors.white54 : Colors.black45,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.timer, size: 28), label: '🌸 Ana Sayfa'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.access_time_filled, size: 28),
-              label: '🌷 Vakitler'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.menu_book, size: 28), label: '🌺 Kuran'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.compass_calibration, size: 28),
-              label: '🕋 Kıble'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.auto_awesome, size: 28), label: '🌸 Zikir'),
-        ],
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: isDark ? Colors.black45 : theme.primary.withValues(alpha: 0.12),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _aktifSayfaIndex,
+          onTap: (idx) {
+            HapticFeedback.selectionClick();
+            setState(() => _aktifSayfaIndex = idx);
+          },
+          backgroundColor: isDark ? theme.cardDark : theme.cardLight,
+          selectedItemColor: theme.primary,
+          unselectedItemColor: isDark ? Colors.white38 : Colors.black45,
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_rounded),
+              label: 'Ana Sayfa',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.access_time_rounded),
+              label: 'Vakitler',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.menu_book_rounded),
+              label: 'Kur\'an',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.explore_rounded),
+              label: 'Kıble',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.radio_button_checked_rounded),
+              label: 'Zikirmatik',
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ==================== ANA DASHBOARD ====================
+// ==================== ANA DASHBOARD (2x2 KARE KUTU DÜZENİ + ARAPÇA/TÜRKÇE/ANLAM DUA KARTI) ====================
 class AnaDashboardSayfasi extends StatefulWidget {
   final String kalanSure, siradakiVakit;
   final double ilerlemeOrani;
   final bool isDark;
-  final String? ozelGunMesaji;
+  final AppThemeData themeData;
+  final Map<String, String> bugununVakitleri;
 
   const AnaDashboardSayfasi({
     super.key,
@@ -4329,7 +2369,8 @@ class AnaDashboardSayfasi extends StatefulWidget {
     required this.siradakiVakit,
     required this.ilerlemeOrani,
     required this.isDark,
-    this.ozelGunMesaji,
+    required this.themeData,
+    required this.bugununVakitleri,
   });
 
   @override
@@ -4337,247 +2378,291 @@ class AnaDashboardSayfasi extends StatefulWidget {
 }
 
 class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
-  late Map<String, String> bugununIcerikleri;
+  Map<String, dynamic> bugununIcerikleri = {
+    "ayet": "Yükleniyor...",
+    "hadis": "Yükleniyor...",
+    "dua": {
+      "arapca": "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ",
+      "okunusu": "Rabbena atina fid-dunya haseneten...",
+      "anlamı": "Rabbimiz! Bize dünyada da iyilik ver, ahirette de iyilik ver."
+    },
+    "esma": "Yükleniyor...",
+  };
 
   @override
   void initState() {
     super.initState();
-    bugununIcerikleri = GunlukIcerikServisi.getBugununIcerikleri();
-    _gununAyetiniCanliCek();
-    _gununHadisiniCanliCek();
-    _gununDuasiniCanliCek();
-    _ozelGunleriHazirla();
+    _icerikleriGetir();
   }
 
-  Future<void> _gununDuasiniCanliCek() async {
-    final canliDua = await GunlukIcerikServisi.gununDuasiGetir();
-    if (!mounted) return;
-    setState(() {
-      bugununIcerikleri = {...bugununIcerikleri, "dua": canliDua};
-    });
+  Future<void> _icerikleriGetir() async {
+    final res = await OnlineIcerikServisi.getGununIcerikleri();
+    if (mounted) {
+      setState(() {
+        bugununIcerikleri = res;
+      });
+    }
   }
 
-  Future<void> _gununAyetiniCanliCek() async {
-    final canliAyet = await GunlukIcerikServisi.gununAyetiGetir();
-    if (!mounted) return;
-    setState(() {
-      bugununIcerikleri = {...bugununIcerikleri, "ayet": canliAyet};
-    });
-  }
-
-  Future<void> _gununHadisiniCanliCek() async {
-    final canliHadis = await GunlukIcerikServisi.gununHadisiGetir();
-    if (!mounted) return;
-    setState(() {
-      bugununIcerikleri = {...bugununIcerikleri, "hadis": canliHadis};
-    });
-  }
-
-  Future<void> _ozelGunleriHazirla() async {
-    await OzelGunler.diniGunleriHazirla();
-    if (!mounted) return;
-    setState(() {});
+  void _paylasIcerik(String baslik, String icerik) {
+    HapticFeedback.lightImpact();
+    final mesaj = "🌸 Ezan Vakti - $baslik 🌸\n\n$icerik\n\nSiz de Ezan Vakti uygulamasını indirin!";
+    Share.share(mesaj);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
-    final kalanSure = widget.kalanSure;
-    final siradakiVakit = widget.siradakiVakit;
-    final ilerlemeOrani = widget.ilerlemeOrani;
-    var yaklasanOzelGun = OzelGunler.getYaklasanOzelGun();
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 800;
+    final theme = widget.themeData;
+
+    final duaObj = bugununIcerikleri["dua"] is Map
+        ? bugununIcerikleri["dua"] as Map<String, String>
+        : {
+            "arapca": "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً",
+            "okunusu": "Rabbena atina fid-dunya...",
+            "anlamı": "Rabbimiz! Bize iyilik ver."
+          };
 
     return SingleChildScrollView(
-      padding:
-          EdgeInsets.symmetric(horizontal: isDesktop ? 40 : 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(
         children: [
-          const SizedBox(height: 10),
-          Center(
-            child: Stack(
-              alignment: Alignment.center,
+          const SizedBox(height: 6),
+
+          // TIMER WIDGET
+          IosGlassCard(
+            isDark: isDark,
+            themeData: theme,
+            padding: const EdgeInsets.all(22),
+            child: Column(
               children: [
-                SizedBox(
-                  width: isDesktop ? 280 : 220,
-                  height: isDesktop ? 280 : 220,
-                  child: CircularProgressIndicator(
-                    value: ilerlemeOrani,
-                    strokeWidth: isDesktop ? 16 : 12,
-                    valueColor: const AlwaysStoppedAnimation(Color(0xFFB5627A)),
-                    backgroundColor: isDark
-                        ? Colors.white10
-                        : const Color(0xFFE8C4D0).withValues(alpha: 0.3),
-                  ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
+                Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Text(
-                      kalanSure,
-                      style: TextStyle(
-                          fontSize: isDesktop ? 42 : 32,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                          color:
-                              isDark ? Colors.white : const Color(0xFFB5627A)),
+                    SizedBox(
+                      width: 190,
+                      height: 190,
+                      child: CircularProgressIndicator(
+                        value: widget.ilerlemeOrani,
+                        strokeWidth: 14,
+                        valueColor: AlwaysStoppedAnimation(theme.primary),
+                        backgroundColor: isDark
+                            ? Colors.white10
+                            : theme.secondary.withValues(alpha: 0.3),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "🌸 Sıradaki: $siradakiVakit",
-                      style: TextStyle(
-                          color: const Color(0xFFB5627A),
-                          fontSize: isDesktop ? 18 : 14,
-                          fontWeight: FontWeight.bold),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.kalanSure,
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                            color: isDark ? theme.textDark : theme.textLight,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Sıradaki: ${widget.siradakiVakit}",
+                          style: TextStyle(
+                            color: theme.primary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          if (widget.ozelGunMesaji != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFB5627A), width: 2),
-                boxShadow: [
-                  BoxShadow(
-                      color: const Color(0xFFE8C4D0).withValues(alpha: 0.3),
-                      blurRadius: 10)
-                ],
+
+          const SizedBox(height: 10),
+
+          // 2x2 KARE KUTU DÜZENİ (AYET, HADİS, DUA, ESMA)
+          Row(
+            children: [
+              Expanded(
+                child: _kareKutuCard(
+                  "Günün Ayeti 🌸",
+                  bugununIcerikleri["ayet"]?.toString() ?? "",
+                  isDark,
+                  theme,
+                ),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.celebration,
-                      color: Color(0xFFB5627A), size: 30),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      widget.ozelGunMesaji!,
-                      style: TextStyle(
-                          fontSize: isDesktop ? 18 : 16,
-                          fontWeight: FontWeight.bold,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF4A2E3B)),
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: _kareKutuCard(
+                  "Günün Hadisi 🌷",
+                  bugununIcerikleri["hadis"]?.toString() ?? "",
+                  isDark,
+                  theme,
+                ),
               ),
-            ),
-          if (yaklasanOzelGun != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFE8C4D0), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                      color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
-                      blurRadius: 10)
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.calendar_today,
-                          size: 18, color: Color(0xFFB5627A)),
-                      const SizedBox(width: 8),
-                      Text("🌸 Yaklaşan Özel Gün",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: Color(0xFFB5627A))),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(yaklasanOzelGun['ad'],
-                      style: TextStyle(
-                          fontSize: isDesktop ? 18 : 16,
-                          fontWeight: FontWeight.bold,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF4A2E3B))),
-                  const SizedBox(height: 4),
-                  Text(
-                      yaklasanOzelGun['kalanGunText'] ??
-                          "${yaklasanOzelGun['kalanGun']} gün sonra 🌷",
-                      style: const TextStyle(
-                          color: Color(0xFFB5627A),
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(yaklasanOzelGun['aciklama'],
-                      style: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.black54,
-                          fontSize: 13,
-                          height: 1.3)),
-                ],
-              ),
-            ),
-          _buyukKarti(
-              "🌷 Günün Ayeti", bugununIcerikleri["ayet"]!, isDesktop, isDark),
+            ],
+          ),
           const SizedBox(height: 12),
-          _buyukKarti("🌺 Günün Hadisi", bugununIcerikleri["hadis"]!, isDesktop,
-              isDark),
-          const SizedBox(height: 12),
-          _buyukKarti(
-              "🦋 Günün Duası", bugununIcerikleri["dua"]!, isDesktop, isDark),
-          const SizedBox(height: 12),
-          _buyukKarti(
-              "🌸 Günün Esması", bugununIcerikleri["esma"]!, isDesktop, isDark),
-          const SizedBox(height: 20),
-          AltBilgiMetni(isDark: isDark),
+          Row(
+            children: [
+              Expanded(
+                child: _kareDuaCard(
+                  "Günün Duası 🌺",
+                  duaObj,
+                  isDark,
+                  theme,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _kareKutuCard(
+                  "Günün Esması 🦋",
+                  bugununIcerikleri["esma"]?.toString() ?? "",
+                  isDark,
+                  theme,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 
-  Widget _buyukKarti(
-      String baslik, String icerik, bool isDesktop, bool isDark) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(isDesktop ? 20 : 14),
-      decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE8C4D0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-              color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
-              blurRadius: 10)
-        ],
+  // KARE KUTU WIDGET (AYET, HADİS, ESMA İÇİN)
+  Widget _kareKutuCard(
+    String baslik,
+    String icerik,
+    bool isDark,
+    AppThemeData theme,
+  ) {
+    return IosGlassCard(
+      isDark: isDark,
+      themeData: theme,
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(14),
+      onTap: () => _paylasIcerik(baslik, icerik),
+      child: SizedBox(
+        height: 160,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    baslik,
+                    style: TextStyle(
+                      color: isDark ? theme.textDark : theme.textLight,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(Icons.share_rounded, size: 18, color: theme.primary),
+              ],
+            ),
+            const Divider(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Text(
+                  icerik,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(baslik,
-              style: const TextStyle(
-                  color: Color(0xFFB5627A),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16)),
-          const SizedBox(height: 8),
-          Text(icerik,
-              style: TextStyle(
-                  color: isDark ? Colors.white70 : Colors.black87,
-                  fontSize: isDesktop ? 16 : 14,
-                  height: 1.4)),
-        ],
+    );
+  }
+
+  // DUA KUTUSU WIDGET (ARAPÇA, TÜRKÇE OKUNUŞU VE ANLAMI)
+  Widget _kareDuaCard(
+    String baslik,
+    Map<String, String> duaMap,
+    bool isDark,
+    AppThemeData theme,
+  ) {
+    final paylasMetin = "${duaMap['arapca']}\n${duaMap['okunusu']}\n${duaMap['anlamı']}";
+
+    return IosGlassCard(
+      isDark: isDark,
+      themeData: theme,
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(14),
+      onTap: () => _paylasIcerik(baslik, paylasMetin),
+      child: SizedBox(
+        height: 160,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    baslik,
+                    style: TextStyle(
+                      color: isDark ? theme.textDark : theme.textLight,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(Icons.share_rounded, size: 18, color: theme.primary),
+              ],
+            ),
+            const Divider(height: 10),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      duaMap['arapca'] ?? "",
+                      style: TextStyle(
+                        color: isDark ? theme.textDark : theme.primary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.right,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "🔤 ${duaMap['okunusu'] ?? ""}",
+                      style: TextStyle(
+                        color: isDark ? Colors.white70 : Colors.black54,
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "📜 ${duaMap['anlamı'] ?? ""}",
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4588,14 +2673,14 @@ class VakitlerListeSayfasi extends StatelessWidget {
   final Map<String, String> bugununVakitleri;
   final String aktifVakit;
   final bool isDark;
-  final String? ozelGunMesaji;
+  final AppThemeData themeData;
 
   const VakitlerListeSayfasi({
     super.key,
     required this.bugununVakitleri,
     required this.aktifVakit,
     required this.isDark,
-    this.ozelGunMesaji,
+    required this.themeData,
   });
 
   @override
@@ -4603,12 +2688,12 @@ class VakitlerListeSayfasi extends StatelessWidget {
     List<MapEntry<String, String>> vakitler = bugununVakitleri.entries.toList();
 
     final Map<String, int> sirala = {
-      "Imsak": 0,
-      "Gunes": 1,
-      "Ogle": 2,
-      "Ikindi": 3,
-      "Aksam": 4,
-      "Yatsi": 5
+      "İmsak": 0,
+      "Güneş": 1,
+      "Öğle": 2,
+      "İkindi": 3,
+      "Akşam": 4,
+      "Yatsı": 5
     };
     vakitler.sort((a, b) {
       int indexA = sirala[a.key] ?? 99;
@@ -4616,123 +2701,45 @@ class VakitlerListeSayfasi extends StatelessWidget {
       return indexA.compareTo(indexB);
     });
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 800;
+    return ListView.builder(
+      padding: const EdgeInsets.all(18),
+      itemCount: vakitler.length,
+      itemBuilder: (context, index) {
+        final entry = vakitler[index];
+        bool isCurrent = aktifVakit.startsWith(entry.key);
 
-    return Column(
-      children: [
-        if (ozelGunMesaji != null)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF2D1B2E).withValues(alpha: 0.8)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFB5627A), width: 2),
-                boxShadow: [
-                  BoxShadow(
-                      color: const Color(0xFFE8C4D0).withValues(alpha: 0.3),
-                      blurRadius: 10)
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.celebration,
-                      color: Color(0xFFB5627A), size: 30),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(ozelGunMesaji!,
-                        style: TextStyle(
-                            fontSize: isDesktop ? 18 : 16,
-                            fontWeight: FontWeight.bold,
-                            color: isDark
-                                ? Colors.white
-                                : const Color(0xFF4A2E3B))),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.all(isDesktop ? 40 : 20),
-            itemCount: vakitler.length,
-            itemBuilder: (context, index) {
-              final entry = vakitler[index];
-              bool isCurrent = aktifVakit.startsWith(entry.key);
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: EdgeInsets.symmetric(
-                    horizontal: isDesktop ? 40 : 24,
-                    vertical: isDesktop ? 24 : 18),
-                decoration: BoxDecoration(
-                  gradient: isCurrent
-                      ? LinearGradient(
-                          colors: isDark
-                              ? [
-                                  const Color(0xFF3D1F3A),
-                                  const Color(0xFF2D1B2E)
-                                ]
-                              : const [Color(0xFFF5E6E8), Color(0xFFE8C4D0)])
-                      : null,
+        return IosGlassCard(
+          isDark: isDark,
+          themeData: themeData,
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                entry.key,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                   color: isCurrent
-                      ? null
-                      : (isDark
-                          ? const Color(0xFF2D1B2E).withValues(alpha: 0.6)
-                          : Colors.white),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: isCurrent
-                          ? const Color(0xFFB5627A)
-                          : (isDark ? Colors.white30 : Colors.grey.shade200),
-                      width: isCurrent ? 2 : 1),
-                  boxShadow: [
-                    BoxShadow(
-                        color: const Color(0xFFE8C4D0).withValues(alpha: 0.2),
-                        blurRadius: 8)
-                  ],
+                      ? themeData.primary
+                      : (isDark ? Colors.white : Colors.black87),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(isCurrent ? Icons.circle : Icons.circle_outlined,
-                            color: isCurrent
-                                ? const Color(0xFFB5627A)
-                                : (isDark ? Colors.white54 : Colors.grey),
-                            size: isDesktop ? 16 : 12),
-                        const SizedBox(width: 12),
-                        Text(entry.key,
-                            style: TextStyle(
-                                fontSize: isDesktop ? 24 : 20,
-                                fontWeight: FontWeight.bold,
-                                color: isCurrent
-                                    ? const Color(0xFFB5627A)
-                                    : (isDark
-                                        ? Colors.white
-                                        : Colors.black87))),
-                      ],
-                    ),
-                    Text(entry.value,
-                        style: TextStyle(
-                            fontSize: isDesktop ? 28 : 24,
-                            fontWeight: FontWeight.bold,
-                            color: isCurrent
-                                ? const Color(0xFFB5627A)
-                                : (isDark ? Colors.white70 : Colors.black87))),
-                  ],
+              ),
+              Text(
+                entry.value,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: isCurrent
+                      ? themeData.primary
+                      : (isDark ? Colors.white70 : Colors.black87),
                 ),
-              );
-            },
+              ),
+            ],
           ),
-        ),
-        AltBilgiMetni(isDark: isDark),
-      ],
+        );
+      },
     );
   }
 }
