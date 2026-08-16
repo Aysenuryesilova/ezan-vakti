@@ -1396,21 +1396,28 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
   }
 
   Map<String, String> _getAgacDurumu(int count) {
-    if (count < 33) {
-      return {"emoji": "🌱", "seviye": "Tohum & Filiz", "mesaj": "Her 33 zikirde tohumun serpilip büyüyecek!"};
-    } else if (count < 99) {
-      return {"emoji": "🌿", "seviye": "Genç Fidan (33+)", "mesaj": "Zikirlerinle fidanın yapraklandı!"};
-    } else if (count < 198) {
-      return {"emoji": "🪴", "seviye": "Serpilen Ağaç (99+)", "mesaj": "Ağacın dal verip güçleniyor!"};
-    } else if (count < 330) {
-      return {"emoji": "🌳", "seviye": "Büyük Yeşil Ağaç (198+)", "mesaj": "Kocaman yeşil yapraklı bir ağaç oldu!"};
-    } else if (count < 660) {
-      return {"emoji": "🌸", "seviye": "Çiçek Açan Ağaç (330+)", "mesaj": "Ağacın mis kokulu çiçeklerle donandı!"};
-    } else if (count < 999) {
-      return {"emoji": "🍎", "seviye": "Meyveli Olgun Ağaç (660+)", "mesaj": "Ağacın nefis meyveler verdi!"};
-    } else {
-      return {"emoji": "👑🌳🍎", "seviye": "1000 Zikir Muhteşem Dev Ağaç", "mesaj": "Tebrikler! 1000 zikre ulaştın ve en büyük ağaca eriştin!"};
-    }
+    int stageIndex = (count ~/ 33) + 1;
+    if (stageIndex > 200) stageIndex = 200;
+
+    final List<String> agacEmojileri = [
+      "🌱", "🌿", "🪴", "🌳", "🌸", "🍎", "🌴", "🫒", "🫐", "🌲",
+      "🍇", "🍊", "🍐", "🥭", "🌺", "🪵", "🍁", "🌰", "🥑", "🌾",
+      "🌴✨", "🌳✨", "🌸✨", "🍎✨", "🫒✨", "👑🌳", "👑🌴", "👑🌸", "👑🍎", "👑🫒"
+    ];
+
+    String emoji = agacEmojileri[(stageIndex - 1) % agacEmojileri.length];
+    if (stageIndex >= 100) emoji = "👑 $emoji";
+
+    int kalanZikir = 33 - (count % 33);
+    if (count > 0 && count % 33 == 0) kalanZikir = 0;
+
+    return {
+      "emoji": emoji,
+      "seviye": "Ağaç Seviyesi: $stageIndex / 200 (Her 33 Zikirde Yeni Ağaç)",
+      "mesaj": kalanZikir == 0 
+          ? "🎉 Tebrikler! 33 zikri tamamladın ve bu seviyedeki ağacı büyüttün!" 
+          : "Sonraki ağacın büyümesine son $kalanZikir zikir kaldı!",
+    };
   }
 
   @override
@@ -1420,6 +1427,9 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
     final mevcutzikir = _zikirler.isNotEmpty ? _zikirler[_seciliIndex] : {"ad": "Zikir", "hedef": 33};
     final int hedefSayi = mevcutzikir["hedef"] ?? 33;
     final agac = _getAgacDurumu(_counter);
+
+    int stageProgress = _counter % 33;
+    double progressVal = (_counter > 0 && stageProgress == 0) ? 1.0 : (stageProgress / 33.0);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),
@@ -1431,50 +1441,19 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "İlerleme Durumu",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? theme.textDark : theme.primary,
-                      ),
-                    ),
-                    Text(
-                      "Zikir Sayısı: $_counter",
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? theme.textDark : theme.primary,
-                      ),
-                    ),
-                  ],
+                Text(
+                  agac["emoji"]!,
+                  style: const TextStyle(fontSize: 60),
                 ),
                 const SizedBox(height: 10),
                 LinearProgressIndicator(
-                  value: (hedefSayi > 0) ? (_counter / hedefSayi.toDouble()).clamp(0.0, 1.0) : 0.0,
+                  value: progressVal.clamp(0.0, 1.0),
                   backgroundColor: isDark ? Colors.white10 : Colors.black12,
                   color: theme.primary,
                   minHeight: 12,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                const SizedBox(height: 14),
-                Text(
-                  agac["emoji"]!,
-                  style: const TextStyle(fontSize: 54),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  agac["seviye"]!,
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? theme.textDark : theme.primary,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 10),
                 Text(
                   agac["mesaj"]!,
                   style: TextStyle(
@@ -2073,18 +2052,20 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
   }
 
   void _ayarlarMenusunuAc() {
-    final theme = AppThemeData.getTheme(widget.currentTheme);
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: widget.isDarkMode ? theme.backgroundDark : theme.backgroundLight,
+      backgroundColor: widget.isDarkMode ? AppThemeData.getTheme(widget.currentTheme).backgroundDark : AppThemeData.getTheme(widget.currentTheme).backgroundLight,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final activeTheme = AppThemeData.getTheme(widget.currentTheme);
+            final theme = activeTheme;
+            final isDark = widget.isDarkMode;
+
             return DraggableScrollableSheet(
               initialChildSize: 0.85,
               minChildSize: 0.5,
@@ -2106,11 +2087,11 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                               style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
-                                color: widget.isDarkMode ? theme.textDark : theme.primary,
+                                color: isDark ? activeTheme.textDark : activeTheme.primary,
                               ),
                             ),
                             IconButton(
-                              icon: Icon(Icons.close, color: theme.primary),
+                              icon: Icon(Icons.close, color: activeTheme.primary),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
@@ -2123,7 +2104,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
-                            color: widget.isDarkMode ? theme.textDark : theme.primary,
+                            color: isDark ? activeTheme.textDark : activeTheme.primary,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -2143,6 +2124,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                                   onSelected: (val) {
                                     if (val) {
                                       widget.onThemeChanged(tMode, widget.isDarkMode);
+                                      setState(() {});
                                       setModalState(() {});
                                     }
                                   },
@@ -2153,32 +2135,47 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                         ),
                         const SizedBox(height: 16),
                         SwitchListTile(
-                          title: Text("🌙 Gece Modu (Koyu Tema)", style: TextStyle(color: widget.isDarkMode ? theme.textDark : theme.primary)),
+                          title: Text("🌙 Gece Modu (Koyu Tema)", style: TextStyle(color: isDark ? activeTheme.textDark : activeTheme.primary)),
                           subtitle: const Text("Tüm kutucukları ve arka planı karanlık renklere bürür"),
                           value: widget.isDarkMode,
                           onChanged: (val) {
                             widget.onThemeChanged(widget.currentTheme, val);
+                            setState(() {});
                             setModalState(() {});
                           },
                         ),
                         const Divider(),
 
-                        Text(
-                          "🔤 Yazı Boyutu (Font Ölçeği)",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: widget.isDarkMode ? theme.textDark : theme.primary,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "🔤 Yazı Boyutu (Font Ölçeği)",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? activeTheme.textDark : activeTheme.primary,
+                              ),
+                            ),
+                            Text(
+                              "%${(widget.fontScale.clamp(0.80, 1.40) * 100).round()}",
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? activeTheme.textDark : activeTheme.primary,
+                              ),
+                            ),
+                          ],
                         ),
                         Slider(
-                          value: widget.fontScale,
-                          min: 0.85,
-                          max: 1.30,
-                          divisions: 3,
-                          activeColor: theme.primary,
+                          value: widget.fontScale.clamp(0.80, 1.40),
+                          min: 0.80,
+                          max: 1.40,
+                          divisions: 12,
+                          activeColor: activeTheme.primary,
                           onChanged: (val) {
                             widget.onFontScaleChanged(val);
+                            setState(() {});
                             setModalState(() {});
                           },
                         ),
@@ -2435,7 +2432,8 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
 
   void _paylasIcerik(String baslik, String icerik) {
     HapticFeedback.lightImpact();
-    final mesaj = "🌸 Ezan Vakti - $baslik 🌸\n\n$icerik\n\nSiz de Ezan Vakti uygulamasını indirin!";
+    const playStoreUrl = "https://play.google.com/store/apps/details?id=com.aysenuryesilova.ezanvakti";
+    final mesaj = "🌸 Ezan Vakti - $baslik 🌸\n\n$icerik\n\n📲 Ezan Vakti uygulamasını Google Play Store'dan indirin:\n$playStoreUrl";
     Share.share(mesaj);
   }
 
