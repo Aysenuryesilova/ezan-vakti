@@ -1764,9 +1764,38 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
     setState(() => isLoading = true);
     try {
       final uri = Uri.parse(
-        'https://ezanvakti.herokuapp.com/vakitler?ilce=$secilenIlce',
+        'https://api.aladhan.com/v1/timingsByCity?city=${Uri.encodeComponent(secilenIlce)}&country=Turkey&method=13',
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      final response = await http.get(uri).timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['code'] == 200 && data['data'] != null && data['data']['timings'] != null) {
+          final timings = data['data']['timings'];
+          setState(() {
+            bugununVakitleri = {
+              "İmsak": timings["Fajr"] ?? "--:--",
+              "Güneş": timings["Sunrise"] ?? "--:--",
+              "Öğle": timings["Dhuhr"] ?? "--:--",
+              "İkindi": timings["Asr"] ?? "--:--",
+              "Akşam": timings["Maghrib"] ?? "--:--",
+              "Yatsı": timings["Isha"] ?? "--:--",
+            };
+            isLoading = false;
+          });
+          _hesaplaKalanSure();
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint("Primary Aladhan API Vakit hatası: $e");
+    }
+
+    try {
+      final uriFallback = Uri.parse(
+        'https://ezanvakti.herokuapp.com/vakitler?ilce=${Uri.encodeComponent(secilenIlce)}',
+      );
+      final response = await http.get(uriFallback).timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -1788,17 +1817,17 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
         }
       }
     } catch (e) {
-      debugPrint("API Vakit getirme hatası: $e");
+      debugPrint("Fallback API hatası: $e");
     }
 
     setState(() {
       bugununVakitleri = {
-        "İmsak": "04:20",
-        "Güneş": "05:55",
-        "Öğle": "13:12",
-        "İkindi": "17:00",
-        "Akşam": "20:18",
-        "Yatsı": "21:45",
+        "İmsak": "04:30",
+        "Güneş": "06:02",
+        "Öğle": "13:15",
+        "İkindi": "17:01",
+        "Akşam": "20:15",
+        "Yatsı": "21:40",
       };
       isLoading = false;
     });
