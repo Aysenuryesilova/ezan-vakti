@@ -5,14 +5,14 @@ class PrayerNotificationService {
   PrayerNotificationService(this._plugin);
 
   final FlutterLocalNotificationsPlugin _plugin;
-  static const _prayers = ['İmsak', 'Öğle', 'İkindi', 'Akşam', 'Yatsı'];
+  static const _prayers = ['İmsak', 'Güneş', 'Öğle', 'İkindi', 'Akşam', 'Yatsı'];
 
   Future<void> scheduleToday({
     required Map<String, String> timings,
     required bool enabled,
     required int minutesBefore,
   }) async {
-    for (var id = 1000; id < 1020; id++) {
+    for (var id = 1000; id < 1050; id++) {
       await _plugin.cancel(id);
     }
     if (!enabled) return;
@@ -20,22 +20,32 @@ class PrayerNotificationService {
     final now = tz.TZDateTime.now(tz.local);
     for (var index = 0; index < _prayers.length; index++) {
       final name = _prayers[index];
-      final time = _parseToday(timings[name], now);
+      var time = _parseToday(timings[name], now);
       if (time == null) continue;
-      await _schedule(
-          id: 1000 + index,
-          at: time,
-          title: '$name vakti',
-          body: '$name vakti geldi.');
-      final reminder = time.subtract(Duration(minutes: minutesBefore));
-      if (reminder.isAfter(now)) {
-        await _schedule(
-          id: 1010 + index,
-          at: reminder,
-          title: '$name vaktine $minutesBefore dakika kaldı',
-          body: 'Hazırlanmak için hatırlatma.',
-        );
+
+      if (time.isBefore(now)) {
+        time = time.add(const Duration(days: 1));
       }
+
+      // 1. Ezan Vakti Bildirimi
+      await _schedule(
+        id: 1000 + index,
+        at: time,
+        title: '🕌 $name Vakti Girdi',
+        body: '$name ezan vakti geldi. Haydin namaza!',
+      );
+
+      // 2. Vakit Öncesi Uyarı Bildirimi (Kilit Ekranı & Tam Ekran)
+      var reminder = time.subtract(Duration(minutes: minutesBefore));
+      if (reminder.isBefore(now)) {
+        reminder = reminder.add(const Duration(days: 1));
+      }
+      await _schedule(
+        id: 1020 + index,
+        at: reminder,
+        title: '🔔 $name Vaktine $minutesBefore Dakika Kaldı',
+        body: 'Ezan okunmasına $minutesBefore dakika kaldı. Abdestinizi alıp hazırlanabilirsiniz.',
+      );
     }
   }
 
@@ -48,11 +58,12 @@ class PrayerNotificationService {
     return tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
   }
 
-  Future<void> _schedule(
-      {required int id,
-      required tz.TZDateTime at,
-      required String title,
-      required String body}) {
+  Future<void> _schedule({
+    required int id,
+    required tz.TZDateTime at,
+    required String title,
+    required String body,
+  }) {
     return _plugin.zonedSchedule(
       id,
       title,
@@ -60,10 +71,23 @@ class PrayerNotificationService {
       at,
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'namaz_vakitleri',
-          'Namaz Vakitleri',
-          importance: Importance.high,
-          priority: Priority.high,
+          'namaz_vakitleri_max_v2',
+          'Namaz Vakitleri & Hatırlatmalar',
+          channelDescription: 'Tam ekran ve kilit ekranı ezan/vakit öncesi hatırlatıcı bildirimleri',
+          importance: Importance.max,
+          priority: Priority.max,
+          visibility: NotificationVisibility.public,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.alarm,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+          enableVibration: true,
+          playSound: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.timeSensitive,
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

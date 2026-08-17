@@ -1763,6 +1763,16 @@ void main() async {
               AndroidFlutterLocalNotificationsPlugin>();
 
       if (androidImplementation != null) {
+        const AndroidNotificationChannel channelMax = AndroidNotificationChannel(
+          'namaz_vakitleri_max_v2',
+          'Namaz Vakitleri & Hatırlatmalar',
+          description: 'Tam ekran ve kilit ekranı ezan/vakit öncesi hatırlatıcı bildirimleri',
+          importance: Importance.max,
+          enableVibration: true,
+          playSound: true,
+        );
+        await androidImplementation.createNotificationChannel(channelMax);
+
         const AndroidNotificationChannel channel1 = AndroidNotificationChannel(
           'namaz_vakitleri',
           'Namaz Vakitleri',
@@ -4023,6 +4033,10 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                               const Text("Uygulama kapalıyken de bildirim al"),
                           value: _vakitOncesiUyari,
                           onChanged: (val) async {
+                            if (val) {
+                              await Permission.notification.request();
+                              await Permission.scheduleExactAlarm.request();
+                            }
                             setModalState(() => _vakitOncesiUyari = val);
                             setState(() => _vakitOncesiUyari = val);
                             await _kaydetTumAyarlar();
