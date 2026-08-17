@@ -13,21 +13,34 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:share_plus/share_plus.dart';
+import 'core/home_widget_service.dart';
+import 'core/prayer_notification_service.dart';
+import 'core/prayer_times_service.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 // ==================== KUSURSUZ VE CANLI iOS TEMA MOTORU ====================
+// ==================== KUSURSUZ VE CANLI iOS TEMA MOTORU ====================
 enum AppThemeMode {
-  rose,      // Gül Pembe (Varsayılan Açılış Teması)
-  emerald,   // Zümrüt Yeşili
-  navy,      // Safir Gece Mavisi
-  obsidian,  // Obsidian Altın
-  amber,     // Sıcak Kehribar & Bal
-  purple,    // Asil Mor & Leylak
-  teal,      // Okyanus Turkuazı
-  ruby,      // Yakut Kırmızı
+  emerald, // Zümrüt Yeşili (Nebevî Yeşil)
+  rose, // Gül Pembe (Gül-i Muhammedi)
+  navy, // Safir Gece Mavisi
+  obsidian, // Obsidian Altın (Kâbe Siyah & Altın)
+  amber, // Kehribar & Bal
+  purple, // Mor & Leylak
+  teal, // Kubbe Turkuazı
+  ruby, // Yakut Kırmızı
+  olive, // Kutsal Zeytin
+  saffron, // Manevi Safran
+  sky, // Semavi Gök Mavisi
+  pearl, // İnci & Gümüş
+  lotus, // Nilüfer Bahçesi (Özel Palet 1)
+  vanilla, // Vanilya & Gül (Özel Palet 2)
+  sakura, // Sakura Gecesi (Özel Palet 3)
+  fig, // İncir & Seramik (Özel Palet 4)
 }
 
 class AppThemeData {
@@ -65,6 +78,31 @@ class AppThemeData {
 
   static AppThemeData getTheme(AppThemeMode mode) {
     switch (mode) {
+      case AppThemeMode.emerald:
+        return const AppThemeData(
+          name: "Zümrüt (Nebevî Yeşil) 🌿",
+          primary: Color(0xFF059669),
+          secondary: Color(0xFF10B981),
+          accent: Color(0xFFECFDF5),
+          backgroundLight: Color(0xFFECFDF5),
+          backgroundDark: Color(0xFF022C22),
+          cardLight: Color(0xFFD1FAE5),
+          cardDark: Color(0xFF064E3B),
+          textLight: Color(0xFF065F46),
+          textDark: Color(0xFFA7F3D0),
+          bgGradientLight: [
+            Color(0xFFECFDF5),
+            Color(0xFFA7F3D0),
+            Color(0xFF6EE7B7)
+          ],
+          bgGradientDark: [
+            Color(0xFF022C22),
+            Color(0xFF064E3B),
+            Color(0xFF021B15)
+          ],
+          cardGradientLight: [Color(0xFFD1FAE5), Color(0xFFA7F3D0)],
+          cardGradientDark: [Color(0xFF064E3B), Color(0xFF022C22)],
+        );
       case AppThemeMode.rose:
         return const AppThemeData(
           name: "Gül Pembe 🌸",
@@ -77,31 +115,22 @@ class AppThemeData {
           cardDark: Color(0xFF4C081A),
           textLight: Color(0xFF9F1239),
           textDark: Color(0xFFFECDD3),
-          bgGradientLight: [Color(0xFFFFF1F2), Color(0xFFFFD6E0), Color(0xFFFFB3C6)],
-          bgGradientDark: [Color(0xFF2A040D), Color(0xFF4A0818), Color(0xFF1F0208)],
+          bgGradientLight: [
+            Color(0xFFFFF1F2),
+            Color(0xFFFFD6E0),
+            Color(0xFFFFB3C6)
+          ],
+          bgGradientDark: [
+            Color(0xFF2A040D),
+            Color(0xFF4A0818),
+            Color(0xFF1F0208)
+          ],
           cardGradientLight: [Color(0xFFFFE4E6), Color(0xFFFFC2D1)],
           cardGradientDark: [Color(0xFF5C0A21), Color(0xFF380514)],
         );
-      case AppThemeMode.emerald:
-        return const AppThemeData(
-          name: "Zümrüt Yeşili 🌿",
-          primary: Color(0xFF047857),
-          secondary: Color(0xFF10B981),
-          accent: Color(0xFFECFDF5),
-          backgroundLight: Color(0xFFECFDF5),
-          backgroundDark: Color(0xFF022C22),
-          cardLight: Color(0xFFD1FAE5),
-          cardDark: Color(0xFF064E3B),
-          textLight: Color(0xFF065F46),
-          textDark: Color(0xFFA7F3D0),
-          bgGradientLight: [Color(0xFFECFDF5), Color(0xFFA7F3D0), Color(0xFF6EE7B7)],
-          bgGradientDark: [Color(0xFF022C22), Color(0xFF064E3B), Color(0xFF021B15)],
-          cardGradientLight: [Color(0xFFD1FAE5), Color(0xFFA7F3D0)],
-          cardGradientDark: [Color(0xFF064E3B), Color(0xFF022C22)],
-        );
       case AppThemeMode.navy:
         return const AppThemeData(
-          name: "Gece Mavisi 🌌",
+          name: "Safir Gece Mavisi 🌌",
           primary: Color(0xFF1D4ED8),
           secondary: Color(0xFF3B82F6),
           accent: Color(0xFFEFF6FF),
@@ -111,14 +140,22 @@ class AppThemeData {
           cardDark: Color(0xFF1C2541),
           textLight: Color(0xFF1E40AF),
           textDark: Color(0xFFBFDBFE),
-          bgGradientLight: [Color(0xFFEFF6FF), Color(0xFFBFDBFE), Color(0xFF93C5FD)],
-          bgGradientDark: [Color(0xFF0B132B), Color(0xFF1C2541), Color(0xFF060B18)],
+          bgGradientLight: [
+            Color(0xFFEFF6FF),
+            Color(0xFFBFDBFE),
+            Color(0xFF93C5FD)
+          ],
+          bgGradientDark: [
+            Color(0xFF0B132B),
+            Color(0xFF1C2541),
+            Color(0xFF060B18)
+          ],
           cardGradientLight: [Color(0xFFDBEAFE), Color(0xFFBFDBFE)],
           cardGradientDark: [Color(0xFF1C2541), Color(0xFF0B132B)],
         );
       case AppThemeMode.obsidian:
         return const AppThemeData(
-          name: "Obsidian Altın 🖤",
+          name: "Obsidian Altın (Kâbe) 🖤",
           primary: Color(0xFFD97706),
           secondary: Color(0xFFFACC15),
           accent: Color(0xFFFEFCE8),
@@ -128,8 +165,16 @@ class AppThemeData {
           cardDark: Color(0xFF18181B),
           textLight: Color(0xFF854D0E),
           textDark: Color(0xFFFDE047),
-          bgGradientLight: [Color(0xFFFEFCE8), Color(0xFFFEF08A), Color(0xFFFDE047)],
-          bgGradientDark: [Color(0xFF09090B), Color(0xFF18181B), Color(0xFF000000)],
+          bgGradientLight: [
+            Color(0xFFFEFCE8),
+            Color(0xFFFEF08A),
+            Color(0xFFFDE047)
+          ],
+          bgGradientDark: [
+            Color(0xFF09090B),
+            Color(0xFF18181B),
+            Color(0xFF000000)
+          ],
           cardGradientLight: [Color(0xFFFEF08A), Color(0xFFFDE047)],
           cardGradientDark: [Color(0xFF27272A), Color(0xFF18181B)],
         );
@@ -145,8 +190,16 @@ class AppThemeData {
           cardDark: Color(0xFF292524),
           textLight: Color(0xFF92400E),
           textDark: Color(0xFFFDE68A),
-          bgGradientLight: [Color(0xFFFFFBEB), Color(0xFFFDE68A), Color(0xFFFCD34D)],
-          bgGradientDark: [Color(0xFF1C1917), Color(0xFF292524), Color(0xFF0C0A09)],
+          bgGradientLight: [
+            Color(0xFFFFFBEB),
+            Color(0xFFFDE68A),
+            Color(0xFFFCD34D)
+          ],
+          bgGradientDark: [
+            Color(0xFF1C1917),
+            Color(0xFF292524),
+            Color(0xFF0C0A09)
+          ],
           cardGradientLight: [Color(0xFFFEF3C7), Color(0xFFFDE68A)],
           cardGradientDark: [Color(0xFF44403C), Color(0xFF292524)],
         );
@@ -162,14 +215,22 @@ class AppThemeData {
           cardDark: Color(0xFF2D0945),
           textLight: Color(0xFF6B21A8),
           textDark: Color(0xFFE9D5FF),
-          bgGradientLight: [Color(0xFFFAF5FF), Color(0xFFE9D5FF), Color(0xFFD8B4FE)],
-          bgGradientDark: [Color(0xFF170624), Color(0xFF2D0945), Color(0xFF0E0317)],
+          bgGradientLight: [
+            Color(0xFFFAF5FF),
+            Color(0xFFE9D5FF),
+            Color(0xFFD8B4FE)
+          ],
+          bgGradientDark: [
+            Color(0xFF170624),
+            Color(0xFF2D0945),
+            Color(0xFF0E0317)
+          ],
           cardGradientLight: [Color(0xFFF3E8FF), Color(0xFFE9D5FF)],
           cardGradientDark: [Color(0xFF3B0C5A), Color(0xFF2D0945)],
         );
       case AppThemeMode.teal:
         return const AppThemeData(
-          name: "Okyanus Turkuazı 🌊",
+          name: "Kubbe Turkuazı 🕌",
           primary: Color(0xFF0D9488),
           secondary: Color(0xFF14B8A6),
           accent: Color(0xFFF0FDFA),
@@ -179,8 +240,16 @@ class AppThemeData {
           cardDark: Color(0xFF0D4744),
           textLight: Color(0xFF115E59),
           textDark: Color(0xFF99F6E4),
-          bgGradientLight: [Color(0xFFF0FDFA), Color(0xFF99F6E4), Color(0xFF5EEAD4)],
-          bgGradientDark: [Color(0xFF042F2C), Color(0xFF0D4744), Color(0xFF021E1C)],
+          bgGradientLight: [
+            Color(0xFFF0FDFA),
+            Color(0xFF99F6E4),
+            Color(0xFF5EEAD4)
+          ],
+          bgGradientDark: [
+            Color(0xFF042F2C),
+            Color(0xFF0D4744),
+            Color(0xFF021E1C)
+          ],
           cardGradientLight: [Color(0xFFCCFBF1), Color(0xFF99F6E4)],
           cardGradientDark: [Color(0xFF115E59), Color(0xFF0D4744)],
         );
@@ -196,10 +265,218 @@ class AppThemeData {
           cardDark: Color(0xFF380714),
           textLight: Color(0xFF9F1239),
           textDark: Color(0xFFFECDD3),
-          bgGradientLight: [Color(0xFFFFF1F2), Color(0xFFFECDD3), Color(0xFFFDA4AF)],
-          bgGradientDark: [Color(0xFF1F040A), Color(0xFF380714), Color(0xFF120206)],
+          bgGradientLight: [
+            Color(0xFFFFF1F2),
+            Color(0xFFFECDD3),
+            Color(0xFFFDA4AF)
+          ],
+          bgGradientDark: [
+            Color(0xFF1F040A),
+            Color(0xFF380714),
+            Color(0xFF120206)
+          ],
           cardGradientLight: [Color(0xFFFFE4E6), Color(0xFFFECDD3)],
           cardGradientDark: [Color(0xFF4C091C), Color(0xFF380714)],
+        );
+      case AppThemeMode.olive:
+        return const AppThemeData(
+          name: "Kutsal Zeytin 🫒",
+          primary: Color(0xFF65A30D),
+          secondary: Color(0xFF84CC16),
+          accent: Color(0xFFF7FEE7),
+          backgroundLight: Color(0xFFF7FEE7),
+          backgroundDark: Color(0xFF1A2E05),
+          cardLight: Color(0xFFECFCCB),
+          cardDark: Color(0xFF2C4C0B),
+          textLight: Color(0xFF3F6212),
+          textDark: Color(0xFFD9F99D),
+          bgGradientLight: [
+            Color(0xFFF7FEE7),
+            Color(0xFFD9F99D),
+            Color(0xFFA3E635)
+          ],
+          bgGradientDark: [
+            Color(0xFF1A2E05),
+            Color(0xFF2C4C0B),
+            Color(0xFF0F1B03)
+          ],
+          cardGradientLight: [Color(0xFFECFCCB), Color(0xFFD9F99D)],
+          cardGradientDark: [Color(0xFF365E0D), Color(0xFF2C4C0B)],
+        );
+      case AppThemeMode.saffron:
+        return const AppThemeData(
+          name: "Manevi Safran 🍊",
+          primary: Color(0xFFEA580C),
+          secondary: Color(0xFFF97316),
+          accent: Color(0xFFFFF7ED),
+          backgroundLight: Color(0xFFFFF7ED),
+          backgroundDark: Color(0xFF2C0B02),
+          cardLight: Color(0xFFFFEDD5),
+          cardDark: Color(0xFF4A1505),
+          textLight: Color(0xFF9A3412),
+          textDark: Color(0xFFFED7AA),
+          bgGradientLight: [
+            Color(0xFFFFF7ED),
+            Color(0xFFFED7AA),
+            Color(0xFFFDBA74)
+          ],
+          bgGradientDark: [
+            Color(0xFF2C0B02),
+            Color(0xFF4A1505),
+            Color(0xFF1A0501)
+          ],
+          cardGradientLight: [Color(0xFFFFEDD5), Color(0xFFFED7AA)],
+          cardGradientDark: [Color(0xFF5C1B07), Color(0xFF4A1505)],
+        );
+      case AppThemeMode.sky:
+        return const AppThemeData(
+          name: "Semavi Gök Mavisi 💎",
+          primary: Color(0xFF0284C7),
+          secondary: Color(0xFF38BDF8),
+          accent: Color(0xFFF0F9FF),
+          backgroundLight: Color(0xFFF0F9FF),
+          backgroundDark: Color(0xFF032B45),
+          cardLight: Color(0xFFE0F2FE),
+          cardDark: Color(0xFF07456F),
+          textLight: Color(0xFF075985),
+          textDark: Color(0xFFBAE6FD),
+          bgGradientLight: [
+            Color(0xFFF0F9FF),
+            Color(0xFFBAE6FD),
+            Color(0xFF7DD3FC)
+          ],
+          bgGradientDark: [
+            Color(0xFF032B45),
+            Color(0xFF07456F),
+            Color(0xFF01192A)
+          ],
+          cardGradientLight: [Color(0xFFE0F2FE), Color(0xFFBAE6FD)],
+          cardGradientDark: [Color(0xFF09568B), Color(0xFF07456F)],
+        );
+      case AppThemeMode.pearl:
+        return const AppThemeData(
+          name: "İnci & Gümüş 🤍",
+          primary: Color(0xFF475569),
+          secondary: Color(0xFF64748B),
+          accent: Color(0xFFF8FAFC),
+          backgroundLight: Color(0xFFF8FAFC),
+          backgroundDark: Color(0xFF0F172A),
+          cardLight: Color(0xFFF1F5F9),
+          cardDark: Color(0xFF1E293B),
+          textLight: Color(0xFF334155),
+          textDark: Color(0xFFCBD5E1),
+          bgGradientLight: [
+            Color(0xFFF8FAFC),
+            Color(0xFFE2E8F0),
+            Color(0xFFCBD5E1)
+          ],
+          bgGradientDark: [
+            Color(0xFF0F172A),
+            Color(0xFF1E293B),
+            Color(0xFF080D1A)
+          ],
+          cardGradientLight: [Color(0xFFF1F5F9), Color(0xFFE2E8F0)],
+          cardGradientDark: [Color(0xFF334155), Color(0xFF1E293B)],
+        );
+      case AppThemeMode.lotus:
+        return const AppThemeData(
+          name: "Nilüfer Bahçesi 🪷",
+          primary: Color(0xFF105666),
+          secondary: Color(0xFF839958),
+          accent: Color(0xFFF7F4D5),
+          backgroundLight: Color(0xFFF7F4D5),
+          backgroundDark: Color(0xFF0A3323),
+          cardLight: Color(0xFFEBE7C0),
+          cardDark: Color(0xFF164936),
+          textLight: Color(0xFF0A3323),
+          textDark: Color(0xFFF7F4D5),
+          bgGradientLight: [
+            Color(0xFFF7F4D5),
+            Color(0xFFD3968C),
+            Color(0xFF839958)
+          ],
+          bgGradientDark: [
+            Color(0xFF0A3323),
+            Color(0xFF105666),
+            Color(0xFF051A12)
+          ],
+          cardGradientLight: [Color(0xFFEBE7C0), Color(0xFFD3968C)],
+          cardGradientDark: [Color(0xFF164936), Color(0xFF105666)],
+        );
+      case AppThemeMode.vanilla:
+        return const AppThemeData(
+          name: "Vanilya & Gül 🍨",
+          primary: Color(0xFFB46A72),
+          secondary: Color(0xFFA8B58A),
+          accent: Color(0xFFFFF7E6),
+          backgroundLight: Color(0xFFFFF7E6),
+          backgroundDark: Color(0xFF2D3A47),
+          cardLight: Color(0xFFF7C8D3),
+          cardDark: Color(0xFF3E4D5E),
+          textLight: Color(0xFF733C43),
+          textDark: Color(0xFFFFF7E6),
+          bgGradientLight: [
+            Color(0xFFFFF7E6),
+            Color(0xFFF7C8D3),
+            Color(0xFFA9B7C6)
+          ],
+          bgGradientDark: [
+            Color(0xFF2D3A47),
+            Color(0xFF3E4D5E),
+            Color(0xFF1A242E)
+          ],
+          cardGradientLight: [Color(0xFFF7C8D3), Color(0xFFA9B7C6)],
+          cardGradientDark: [Color(0xFF3E4D5E), Color(0xFF2D3A47)],
+        );
+      case AppThemeMode.sakura:
+        return const AppThemeData(
+          name: "Sakura Gecesi 🌸",
+          primary: Color(0xFF806C79),
+          secondary: Color(0xFFC1A0AC),
+          accent: Color(0xFFF0D9E4),
+          backgroundLight: Color(0xFFF0D9E4),
+          backgroundDark: Color(0xFF16131F),
+          cardLight: Color(0xFFE0C4D0),
+          cardDark: Color(0xFF2D2536),
+          textLight: Color(0xFF4A3F4B),
+          textDark: Color(0xFFF0D9E4),
+          bgGradientLight: [
+            Color(0xFFF0D9E4),
+            Color(0xFFC1A0AC),
+            Color(0xFF806C79)
+          ],
+          bgGradientDark: [
+            Color(0xFF16131F),
+            Color(0xFF4A3F4B),
+            Color(0xFF0B0910)
+          ],
+          cardGradientLight: [Color(0xFFE0C4D0), Color(0xFFC1A0AC)],
+          cardGradientDark: [Color(0xFF2D2536), Color(0xFF16131F)],
+        );
+      case AppThemeMode.fig:
+        return const AppThemeData(
+          name: "İncir & Seramik 🫒",
+          primary: Color(0xFF613C4E),
+          secondary: Color(0xFF9FA764),
+          accent: Color(0xFFD9D8D0),
+          backgroundLight: Color(0xFFD9D8D0),
+          backgroundDark: Color(0xFF302B1A),
+          cardLight: Color(0xFFC5C4B9),
+          cardDark: Color(0xFF463D27),
+          textLight: Color(0xFF613C4E),
+          textDark: Color(0xFFD9D8D0),
+          bgGradientLight: [
+            Color(0xFFD9D8D0),
+            Color(0xFF9FA764),
+            Color(0xFF816A60)
+          ],
+          bgGradientDark: [
+            Color(0xFF302B1A),
+            Color(0xFF613C4E),
+            Color(0xFF1F1B10)
+          ],
+          cardGradientLight: [Color(0xFFC5C4B9), Color(0xFF9FA764)],
+          cardGradientDark: [Color(0xFF463D27), Color(0xFF302B1A)],
         );
     }
   }
@@ -208,87 +485,1068 @@ class AppThemeData {
 // TÜRKİYE EXHAUSTIVE 81 İL VE TÜM İLÇELERİ LİSTESİ
 class TurkiyeSehirler {
   static final Map<String, List<String>> ilIlceMap = {
-    "Adana": ["Aladağ", "Ceyhan", "Çukurova", "Feke", "İmamoğlu", "Karaisalı", "Karataş", "Kozan", "Pozantı", "Saimbeyli", "Sarıçam", "Seyhan", "Tufanbeyli", "Yumurtalık", "Yüreğir"],
-    "Adıyaman": ["Besni", "Çelikhan", "Gerger", "Gölbaşı", "Kahta", "Merkez", "Samsat", "Sincik", "Tut"],
-    "Afyonkarahisar": ["Başmakçı", "Bayat", "Bolvadin", "Çay", "Çobanlar", "Dazkırı", "Dinar", "Emirdağ", "Evciler", "Hocalar", "İhsaniye", "İscehisar", "Kızılören", "Merkez", "Sandıklı", "Sinanpaşa", "Sultandağı", "Şuhut"],
-    "Ağrı": ["Diyadin", "Doğubayazıt", "Eleşkirt", "Hamur", "Merkez", "Patnos", "Taşlıçay", "Tutak"],
-    "Amasya": ["Göynücek", "Gümüşhacıköy", "Hamamözü", "Merkez", "Merzifon", "Suluova", "Taşova"],
-    "Ankara": ["Akyurt", "Altındağ", "Ayaş", "Bala", "Beypazarı", "Çamlıdere", "Çankaya", "Çubuk", "Elmadağ", "Etimesgut", "Evren", "Gölbaşı", "Güdül", "Haymana", "Kahramankazan", "Kalecik", "Keçiören", "Kızılcahamam", "Mamak", "Nallıhan", "Polatlı", "Pursaklar", "Sincan", "Şereflikoçhisar", "Yenimahalle"],
-    "Antalya": ["Akseki", "Aksu", "Alanya", "Demre", "Döşemealtı", "Elmalı", "Finike", "Gazipaşa", "Gündoğmuş", "İbradı", "Kaş", "Kemer", "Kepez", "Konyaaltı", "Korkuteli", "Kumluca", "Manavgat", "Muratpaşa", "Serik"],
-    "Artvin": ["Ardanuç", "Arhavi", "Borçka", "Hopa", "Kemalpaşa", "Merkez", "Murgul", "Şavşat", "Yusufeli"],
-    "Aydın": ["Bozdoğan", "Buharkent", "Çine", "Didim", "Efeler", "Germencik", "İncirliova", "Karacasu", "Karpuzlu", "Koçarlı", "Köşk", "Kuşadası", "Kuyucak", "Nazilli", "Söke", "Sultanhisar", "Yenipazar"],
-    "Balıkesir": ["Altıeylül", "Ayvalık", "Balya", "Bandırma", "Bigadiç", "Burhaniye", "Dursunbey", "Edremit", "Erdek", "Gömeç", "Gönen", "Havran", "İvrindi", "Karesi", "Kepsut", "Manyas", "Marmara", "Savaştepe", "Sındırgı", "Susurluk"],
-    "Bilecik": ["Bozüyük", "Gölpazarı", "İnhisar", "Merkez", "Osmaneli", "Pazaryeri", "Söğüt", "Yenipazar"],
-    "Bingöl": ["Adaklı", "Genç", "Karlıova", "Kiğı", "Merkez", "Solhan", "Yayladere", "Yedisu"],
-    "Bitlis": ["Adilcevaz", "Ahlat", "Güroymak", "Hizan", "Merkez", "Mutki", "Tatvan"],
-    "Bolu": ["Dörtdivan", "Gerede", "Göynük", "Kıbrıscık", "Mengen", "Merkez", "Mudurnu", "Seben", "Yeniçağa"],
-    "Burdur": ["Ağlasun", "Altınyayla", "Bucak", "Çavdır", "Çeltikçi", "Gölhisar", "Karamanlı", "Kemer", "Merkez", "Tefenni", "Yeşilova"],
-    "Bursa": ["Büyükorhan", "Gemlik", "Gürsu", "Harmancık", "İnegöl", "İznik", "Karacabey", "Keles", "Kestel", "Mudanya", "Mustafakemalpaşa", "Nilüfer", "Orhaneli", "Orhangazi", "Osmangazi", "Yenişehir", "Yıldırım"],
-    "Çanakkale": ["Ayvacık", "Bayramiç", "Biga", "Bozcaada", "Çan", "Eceabat", "Ezine", "Gelibolu", "Gökçeada", "Lapseki", "Merkez", "Yenice"],
-    "Çankırı": ["Atkaracalar", "Bayramören", "Çerkeş", "Eldivan", "Ilgaz", "Kızılırmak", "Korgun", "Kurşunlu", "Merkez", "Orta", "Şabanözü", "Yapraklı"],
-    "Çorum": ["Alaca", "Bayat", "Boğazkale", "Dodurga", "İskilip", "Kargı", "Laçin", "Mecitözü", "Merkez", "Oğuzlar", "Ortaköy", "Osmancık", "Sungurlu", "Uğurludağ"],
-    "Denizli": ["Acıpayam", "Babadağ", "Baklan", "Bekilli", "Beyağaç", "Bozkurt", "Buldan", "Çal", "Çameli", "Çardak", "Çivril", "Güney", "Honaz", "Kale", "Merkezefendi", "Pamukkale", "Sarayköy", "Serinhisar", "Tavas"],
-    "Diyarbakır": ["Bağlar", "Bismil", "Çermik", "Çınar", "Çüngüş", "Dicle", "Eğil", "Ergani", "Hani", "Hazro", "Kayapınar", "Kocaköy", "Kulp", "Lice", "Silvan", "Sur", "Yenişehir"],
-    "Edirne": ["Enez", "Havsa", "İpsala", "Keşan", "Lalapaşa", "Meriç", "Merkez", "Süloğlu", "Uzunköprü"],
-    "Elazığ": ["Ağın", "Alacakaya", "Arıcak", "Baskil", "Karakoçan", "Keban", "Kovancılar", "Maden", "Merkez", "Palu", "Sivrice"],
-    "Erzincan": ["Çayırlı", "İliç", "Kemah", "Kemaliye", "Merkez", "Otlukbeli", "Refahiye", "Tercan", "Üzümlü"],
-    "Erzurum": ["Aşkale", "Aziziye", "Çat", "Hınıs", "Horasan", "İspir", "Karaçoban", "Karayazı", "Köprüköy", "Narman", "Oltu", "Olur", "Palandöken", "Pasinler", "Pazaryolu", "Şenkaya", "Tekman", "Tortum", "Uzundere", "Yakutiye"],
-    "Eskişehir": ["Alpu", "Beylikova", "Çifteler", "Günyüzü", "Han", "İnönü", "Mahmudiye", "Mihalgazi", "Mihalıççık", "Odunpazarı", "Seyitgazi", "Sivrihisar", "Tepebaşı"],
-    "Gaziantep": ["Arabam", "İslahiye", "Karkamış", "Nizip", "Oğuzeli", "Nurdağı", "Şahinbey", "Şehitkamil", "Yavuzeli"],
-    "Giresun": ["Alucra", "Bulancak", "Çamoluk", "Çanakçı", "Dereli", "Doğankent", "Espiye", "Eynesil", "Görele", "Güce", "Keşap", "Merkez", "Piraziz", "Şebinkarahisar", "Tirebolu", "Yağlıdere"],
+    "Adana": [
+      "Aladağ",
+      "Ceyhan",
+      "Çukurova",
+      "Feke",
+      "İmamoğlu",
+      "Karaisalı",
+      "Karataş",
+      "Kozan",
+      "Pozantı",
+      "Saimbeyli",
+      "Sarıçam",
+      "Seyhan",
+      "Tufanbeyli",
+      "Yumurtalık",
+      "Yüreğir"
+    ],
+    "Adıyaman": [
+      "Besni",
+      "Çelikhan",
+      "Gerger",
+      "Gölbaşı",
+      "Kahta",
+      "Merkez",
+      "Samsat",
+      "Sincik",
+      "Tut"
+    ],
+    "Afyonkarahisar": [
+      "Başmakçı",
+      "Bayat",
+      "Bolvadin",
+      "Çay",
+      "Çobanlar",
+      "Dazkırı",
+      "Dinar",
+      "Emirdağ",
+      "Evciler",
+      "Hocalar",
+      "İhsaniye",
+      "İscehisar",
+      "Kızılören",
+      "Merkez",
+      "Sandıklı",
+      "Sinanpaşa",
+      "Sultandağı",
+      "Şuhut"
+    ],
+    "Ağrı": [
+      "Diyadin",
+      "Doğubayazıt",
+      "Eleşkirt",
+      "Hamur",
+      "Merkez",
+      "Patnos",
+      "Taşlıçay",
+      "Tutak"
+    ],
+    "Amasya": [
+      "Göynücek",
+      "Gümüşhacıköy",
+      "Hamamözü",
+      "Merkez",
+      "Merzifon",
+      "Suluova",
+      "Taşova"
+    ],
+    "Ankara": [
+      "Akyurt",
+      "Altındağ",
+      "Ayaş",
+      "Bala",
+      "Beypazarı",
+      "Çamlıdere",
+      "Çankaya",
+      "Çubuk",
+      "Elmadağ",
+      "Etimesgut",
+      "Evren",
+      "Gölbaşı",
+      "Güdül",
+      "Haymana",
+      "Kahramankazan",
+      "Kalecik",
+      "Keçiören",
+      "Kızılcahamam",
+      "Mamak",
+      "Nallıhan",
+      "Polatlı",
+      "Pursaklar",
+      "Sincan",
+      "Şereflikoçhisar",
+      "Yenimahalle"
+    ],
+    "Antalya": [
+      "Akseki",
+      "Aksu",
+      "Alanya",
+      "Demre",
+      "Döşemealtı",
+      "Elmalı",
+      "Finike",
+      "Gazipaşa",
+      "Gündoğmuş",
+      "İbradı",
+      "Kaş",
+      "Kemer",
+      "Kepez",
+      "Konyaaltı",
+      "Korkuteli",
+      "Kumluca",
+      "Manavgat",
+      "Muratpaşa",
+      "Serik"
+    ],
+    "Artvin": [
+      "Ardanuç",
+      "Arhavi",
+      "Borçka",
+      "Hopa",
+      "Kemalpaşa",
+      "Merkez",
+      "Murgul",
+      "Şavşat",
+      "Yusufeli"
+    ],
+    "Aydın": [
+      "Bozdoğan",
+      "Buharkent",
+      "Çine",
+      "Didim",
+      "Efeler",
+      "Germencik",
+      "İncirliova",
+      "Karacasu",
+      "Karpuzlu",
+      "Koçarlı",
+      "Köşk",
+      "Kuşadası",
+      "Kuyucak",
+      "Nazilli",
+      "Söke",
+      "Sultanhisar",
+      "Yenipazar"
+    ],
+    "Balıkesir": [
+      "Altıeylül",
+      "Ayvalık",
+      "Balya",
+      "Bandırma",
+      "Bigadiç",
+      "Burhaniye",
+      "Dursunbey",
+      "Edremit",
+      "Erdek",
+      "Gömeç",
+      "Gönen",
+      "Havran",
+      "İvrindi",
+      "Karesi",
+      "Kepsut",
+      "Manyas",
+      "Marmara",
+      "Savaştepe",
+      "Sındırgı",
+      "Susurluk"
+    ],
+    "Bilecik": [
+      "Bozüyük",
+      "Gölpazarı",
+      "İnhisar",
+      "Merkez",
+      "Osmaneli",
+      "Pazaryeri",
+      "Söğüt",
+      "Yenipazar"
+    ],
+    "Bingöl": [
+      "Adaklı",
+      "Genç",
+      "Karlıova",
+      "Kiğı",
+      "Merkez",
+      "Solhan",
+      "Yayladere",
+      "Yedisu"
+    ],
+    "Bitlis": [
+      "Adilcevaz",
+      "Ahlat",
+      "Güroymak",
+      "Hizan",
+      "Merkez",
+      "Mutki",
+      "Tatvan"
+    ],
+    "Bolu": [
+      "Dörtdivan",
+      "Gerede",
+      "Göynük",
+      "Kıbrıscık",
+      "Mengen",
+      "Merkez",
+      "Mudurnu",
+      "Seben",
+      "Yeniçağa"
+    ],
+    "Burdur": [
+      "Ağlasun",
+      "Altınyayla",
+      "Bucak",
+      "Çavdır",
+      "Çeltikçi",
+      "Gölhisar",
+      "Karamanlı",
+      "Kemer",
+      "Merkez",
+      "Tefenni",
+      "Yeşilova"
+    ],
+    "Bursa": [
+      "Büyükorhan",
+      "Gemlik",
+      "Gürsu",
+      "Harmancık",
+      "İnegöl",
+      "İznik",
+      "Karacabey",
+      "Keles",
+      "Kestel",
+      "Mudanya",
+      "Mustafakemalpaşa",
+      "Nilüfer",
+      "Orhaneli",
+      "Orhangazi",
+      "Osmangazi",
+      "Yenişehir",
+      "Yıldırım"
+    ],
+    "Çanakkale": [
+      "Ayvacık",
+      "Bayramiç",
+      "Biga",
+      "Bozcaada",
+      "Çan",
+      "Eceabat",
+      "Ezine",
+      "Gelibolu",
+      "Gökçeada",
+      "Lapseki",
+      "Merkez",
+      "Yenice"
+    ],
+    "Çankırı": [
+      "Atkaracalar",
+      "Bayramören",
+      "Çerkeş",
+      "Eldivan",
+      "Ilgaz",
+      "Kızılırmak",
+      "Korgun",
+      "Kurşunlu",
+      "Merkez",
+      "Orta",
+      "Şabanözü",
+      "Yapraklı"
+    ],
+    "Çorum": [
+      "Alaca",
+      "Bayat",
+      "Boğazkale",
+      "Dodurga",
+      "İskilip",
+      "Kargı",
+      "Laçin",
+      "Mecitözü",
+      "Merkez",
+      "Oğuzlar",
+      "Ortaköy",
+      "Osmancık",
+      "Sungurlu",
+      "Uğurludağ"
+    ],
+    "Denizli": [
+      "Acıpayam",
+      "Babadağ",
+      "Baklan",
+      "Bekilli",
+      "Beyağaç",
+      "Bozkurt",
+      "Buldan",
+      "Çal",
+      "Çameli",
+      "Çardak",
+      "Çivril",
+      "Güney",
+      "Honaz",
+      "Kale",
+      "Merkezefendi",
+      "Pamukkale",
+      "Sarayköy",
+      "Serinhisar",
+      "Tavas"
+    ],
+    "Diyarbakır": [
+      "Bağlar",
+      "Bismil",
+      "Çermik",
+      "Çınar",
+      "Çüngüş",
+      "Dicle",
+      "Eğil",
+      "Ergani",
+      "Hani",
+      "Hazro",
+      "Kayapınar",
+      "Kocaköy",
+      "Kulp",
+      "Lice",
+      "Silvan",
+      "Sur",
+      "Yenişehir"
+    ],
+    "Edirne": [
+      "Enez",
+      "Havsa",
+      "İpsala",
+      "Keşan",
+      "Lalapaşa",
+      "Meriç",
+      "Merkez",
+      "Süloğlu",
+      "Uzunköprü"
+    ],
+    "Elazığ": [
+      "Ağın",
+      "Alacakaya",
+      "Arıcak",
+      "Baskil",
+      "Karakoçan",
+      "Keban",
+      "Kovancılar",
+      "Maden",
+      "Merkez",
+      "Palu",
+      "Sivrice"
+    ],
+    "Erzincan": [
+      "Çayırlı",
+      "İliç",
+      "Kemah",
+      "Kemaliye",
+      "Merkez",
+      "Otlukbeli",
+      "Refahiye",
+      "Tercan",
+      "Üzümlü"
+    ],
+    "Erzurum": [
+      "Aşkale",
+      "Aziziye",
+      "Çat",
+      "Hınıs",
+      "Horasan",
+      "İspir",
+      "Karaçoban",
+      "Karayazı",
+      "Köprüköy",
+      "Narman",
+      "Oltu",
+      "Olur",
+      "Palandöken",
+      "Pasinler",
+      "Pazaryolu",
+      "Şenkaya",
+      "Tekman",
+      "Tortum",
+      "Uzundere",
+      "Yakutiye"
+    ],
+    "Eskişehir": [
+      "Alpu",
+      "Beylikova",
+      "Çifteler",
+      "Günyüzü",
+      "Han",
+      "İnönü",
+      "Mahmudiye",
+      "Mihalgazi",
+      "Mihalıççık",
+      "Odunpazarı",
+      "Seyitgazi",
+      "Sivrihisar",
+      "Tepebaşı"
+    ],
+    "Gaziantep": [
+      "Arabam",
+      "İslahiye",
+      "Karkamış",
+      "Nizip",
+      "Oğuzeli",
+      "Nurdağı",
+      "Şahinbey",
+      "Şehitkamil",
+      "Yavuzeli"
+    ],
+    "Giresun": [
+      "Alucra",
+      "Bulancak",
+      "Çamoluk",
+      "Çanakçı",
+      "Dereli",
+      "Doğankent",
+      "Espiye",
+      "Eynesil",
+      "Görele",
+      "Güce",
+      "Keşap",
+      "Merkez",
+      "Piraziz",
+      "Şebinkarahisar",
+      "Tirebolu",
+      "Yağlıdere"
+    ],
     "Gümüşhane": ["Kelkit", "Köse", "Kürtün", "Merkez", "Şiran", "Torul"],
     "Hakkari": ["Çukurca", "Derecik", "Merkez", "Şemdinli", "Yüksekova"],
-    "Hatay": ["Altınözü", "Antakya", "Arsuz", "Belen", "Defne", "Dörtyol", "Ezin", "Hassa", "İskenderun", "Kırıkhan", "Kumlu", "Payas", "Reyhanlı", "Samandağ", "Yayladağı"],
-    "Isparta": ["Aksu", "Atabey", "Eğirdir", "Gelendost", "Gönen", "Keçiborlu", "Merkez", "Senirkent", "Sütçüler", "Şarkikaraağaç", "Uluborlu", "Yalvaç", "Yenişarbademli"],
-    "Mersin": ["Akdeniz", "Anamur", "Aydıncık", "Bozyazı", "Çamlıyayla", "Erdemli", "Gülnar", "Mezitli", "Mut", "Silifke", "Tarsus", "Toroslar", "Yenişehir"],
-    "İstanbul": ["Adalar", "Arnavutköy", "Ataşehir", "Avcılar", "Bağcılar", "Bahçelievler", "Bakırköy", "Başakşehir", "Bayrampaşa", "Beşiktaş", "Beykoz", "Beylikdüzü", "Beyoğlu", "Büyükçekmece", "Çatalca", "Çekmeköy", "Esenler", "Esenyurt", "Eyüpsultan", "Fatih", "Gaziosmanpaşa", "Güngören", "Kadıköy", "Kağıthane", "Kartal", "Küçükçekmece", "Maltepe", "Pendik", "Sancaktepe", "Sarıyer", "Silivri", "Sultanbeyli", "Sultangazi", "Şile", "Şişli", "Tuzla", "Ümraniye", "Üsküdar", "Zeytinburnu"],
-    "İzmir": ["Aliağa", "Balçova", "Bayındır", "Bayraklı", "Bergama", "Beydağ", "Bornova", "Buca", "Çeşme", "Çiğli", "Dikili", "Foça", "Gaziemir", "Güzelbahçe", "Karabağlar", "Karaburun", "Karşıyaka", "Kemalpaşa", "Kınık", "Kiraz", "Konak", "Menderes", "Menemen", "Narlıdere", "Ödemiş", "Seferihisar", "Selçuk", "Tire", "Torbalı", "Urla"],
-    "Kars": ["Akyaka", "Arpaçay", "Digor", "Kağızman", "Merkez", "Sarıkamış", "Selim", "Susuz"],
-    "Kastamonu": ["Abana", "Ağlı", "Araç", "Azdavay", "Bozkurt", "Cide", "Çatalzeytin", "Daday", "Devrekani", "Doğanyurt", "Hanönü", "İhsangazi", "İnebolu", "Küre", "Merkez", "Pınarbaşı", "Seydiler", "Şenpazar", "Taşköprü", "Tosya"],
-    "Kayseri": ["Akkışla", "Bünyan", "Develi", "Felahiye", "Hacılar", "İncesu", "Kocasinan", "Melikgazi", "Özvatan", "Pınarbaşı", "Sarıoğlan", "Sarız", "Talas", "Tomarza", "Yahyalı", "Yeşilhisar"],
-    "Kırklareli": ["Babaeski", "Demirköy", "Kofçaz", "Lüleburgaz", "Merkez", "Pehlivanköy", "Pınarhisar", "Vize"],
-    "Kırşehir": ["Akçakent", "Akpınar", "Boztepe", "Çiçekdağı", "Kaman", "Merkez", "Mucur"],
-    "Kocaeli": ["Başiskele", "Çayırova", "Darıca", "Derince", "Dilovası", "Gebze", "Gölcük", "İzmit", "Kandıra", "Karamürsel", "Kartepe", "Körfez"],
-    "Konya": ["Ahırlı", "Akören", "Akşehir", "Altınekin", "Beyşehir", "Bozkır", "Cihanbeyli", "Çeltik", "Çumra", "Derbent", "Derebucak", "Doğanhisar", "Emirgazi", "Ereğli", "Güneysınır", "Hadim", "Halkapınar", "Hüyük", "Ilgın", "Kadınhanı", "Karapınar", "Karatay", "Kulu", "Meram", "Sarayönü", "Selçuklu", "Seydişehir", "Taşkent", "Tuzlukçu", "Yalıhüyük", "Yunak"],
-    "Kütahya": ["Altıntaş", "Aslanapa", "Çavdarhisar", "Domaniç", "Dumlupınar", "Emet", "Gediz", "Hisarcık", "Merkez", "Pazarlar", "Şaphane", "Simav", "Tavşanlı"],
-    "Malatya": ["Akçadağ", "Arapgir", "Arguvan", "Battalgazi", "Darende", "Doğanşehir", "Doğanyol", "Hekimhan", "Kale", "Kuluncak", "Pütürge", "Yazıhan", "Yeşilyurt"],
-    "Manisa": ["Ahmetli", "Akhisar", "Alaşehir", "Demirci", "Gölmarmara", "Gördes", "Kırkağaç", "Köprübaşı", "Kula", "Salihli", "Sarıgöl", "Saruhanlı", "Selendi", "Soma", "Şehzadeler", "Turgutlu", "Yunusemre"],
-    "Kahramanmaraş": ["Afşin", "Andırın", "Çağlayancerit", "Dulkadiroğlu", "Ekinözü", "Elbistan", "Göksun", "Nurhak", "Onikişubat", "Pazarcık", "Türkoğlu"],
-    "Mardin": ["Artuklu", "Dargeçit", "Derik", "Kızıltepe", "Mazıdağı", "Midyat", "Nusaybin", "Ömerli", "Savur", "Yeşilli"],
-    "Muğla": ["Bodrum", "Dalaman", "Datça", "Fethiye", "Kavaklıdere", "Köyceğiz", "Marmaris", "Menteşe", "Milas", "Ortaca", "Seydikemer", "Ula", "Yatağan"],
+    "Hatay": [
+      "Altınözü",
+      "Antakya",
+      "Arsuz",
+      "Belen",
+      "Defne",
+      "Dörtyol",
+      "Ezin",
+      "Hassa",
+      "İskenderun",
+      "Kırıkhan",
+      "Kumlu",
+      "Payas",
+      "Reyhanlı",
+      "Samandağ",
+      "Yayladağı"
+    ],
+    "Isparta": [
+      "Aksu",
+      "Atabey",
+      "Eğirdir",
+      "Gelendost",
+      "Gönen",
+      "Keçiborlu",
+      "Merkez",
+      "Senirkent",
+      "Sütçüler",
+      "Şarkikaraağaç",
+      "Uluborlu",
+      "Yalvaç",
+      "Yenişarbademli"
+    ],
+    "Mersin": [
+      "Akdeniz",
+      "Anamur",
+      "Aydıncık",
+      "Bozyazı",
+      "Çamlıyayla",
+      "Erdemli",
+      "Gülnar",
+      "Mezitli",
+      "Mut",
+      "Silifke",
+      "Tarsus",
+      "Toroslar",
+      "Yenişehir"
+    ],
+    "İstanbul": [
+      "Adalar",
+      "Arnavutköy",
+      "Ataşehir",
+      "Avcılar",
+      "Bağcılar",
+      "Bahçelievler",
+      "Bakırköy",
+      "Başakşehir",
+      "Bayrampaşa",
+      "Beşiktaş",
+      "Beykoz",
+      "Beylikdüzü",
+      "Beyoğlu",
+      "Büyükçekmece",
+      "Çatalca",
+      "Çekmeköy",
+      "Esenler",
+      "Esenyurt",
+      "Eyüpsultan",
+      "Fatih",
+      "Gaziosmanpaşa",
+      "Güngören",
+      "Kadıköy",
+      "Kağıthane",
+      "Kartal",
+      "Küçükçekmece",
+      "Maltepe",
+      "Pendik",
+      "Sancaktepe",
+      "Sarıyer",
+      "Silivri",
+      "Sultanbeyli",
+      "Sultangazi",
+      "Şile",
+      "Şişli",
+      "Tuzla",
+      "Ümraniye",
+      "Üsküdar",
+      "Zeytinburnu"
+    ],
+    "İzmir": [
+      "Aliağa",
+      "Balçova",
+      "Bayındır",
+      "Bayraklı",
+      "Bergama",
+      "Beydağ",
+      "Bornova",
+      "Buca",
+      "Çeşme",
+      "Çiğli",
+      "Dikili",
+      "Foça",
+      "Gaziemir",
+      "Güzelbahçe",
+      "Karabağlar",
+      "Karaburun",
+      "Karşıyaka",
+      "Kemalpaşa",
+      "Kınık",
+      "Kiraz",
+      "Konak",
+      "Menderes",
+      "Menemen",
+      "Narlıdere",
+      "Ödemiş",
+      "Seferihisar",
+      "Selçuk",
+      "Tire",
+      "Torbalı",
+      "Urla"
+    ],
+    "Kars": [
+      "Akyaka",
+      "Arpaçay",
+      "Digor",
+      "Kağızman",
+      "Merkez",
+      "Sarıkamış",
+      "Selim",
+      "Susuz"
+    ],
+    "Kastamonu": [
+      "Abana",
+      "Ağlı",
+      "Araç",
+      "Azdavay",
+      "Bozkurt",
+      "Cide",
+      "Çatalzeytin",
+      "Daday",
+      "Devrekani",
+      "Doğanyurt",
+      "Hanönü",
+      "İhsangazi",
+      "İnebolu",
+      "Küre",
+      "Merkez",
+      "Pınarbaşı",
+      "Seydiler",
+      "Şenpazar",
+      "Taşköprü",
+      "Tosya"
+    ],
+    "Kayseri": [
+      "Akkışla",
+      "Bünyan",
+      "Develi",
+      "Felahiye",
+      "Hacılar",
+      "İncesu",
+      "Kocasinan",
+      "Melikgazi",
+      "Özvatan",
+      "Pınarbaşı",
+      "Sarıoğlan",
+      "Sarız",
+      "Talas",
+      "Tomarza",
+      "Yahyalı",
+      "Yeşilhisar"
+    ],
+    "Kırklareli": [
+      "Babaeski",
+      "Demirköy",
+      "Kofçaz",
+      "Lüleburgaz",
+      "Merkez",
+      "Pehlivanköy",
+      "Pınarhisar",
+      "Vize"
+    ],
+    "Kırşehir": [
+      "Akçakent",
+      "Akpınar",
+      "Boztepe",
+      "Çiçekdağı",
+      "Kaman",
+      "Merkez",
+      "Mucur"
+    ],
+    "Kocaeli": [
+      "Başiskele",
+      "Çayırova",
+      "Darıca",
+      "Derince",
+      "Dilovası",
+      "Gebze",
+      "Gölcük",
+      "İzmit",
+      "Kandıra",
+      "Karamürsel",
+      "Kartepe",
+      "Körfez"
+    ],
+    "Konya": [
+      "Ahırlı",
+      "Akören",
+      "Akşehir",
+      "Altınekin",
+      "Beyşehir",
+      "Bozkır",
+      "Cihanbeyli",
+      "Çeltik",
+      "Çumra",
+      "Derbent",
+      "Derebucak",
+      "Doğanhisar",
+      "Emirgazi",
+      "Ereğli",
+      "Güneysınır",
+      "Hadim",
+      "Halkapınar",
+      "Hüyük",
+      "Ilgın",
+      "Kadınhanı",
+      "Karapınar",
+      "Karatay",
+      "Kulu",
+      "Meram",
+      "Sarayönü",
+      "Selçuklu",
+      "Seydişehir",
+      "Taşkent",
+      "Tuzlukçu",
+      "Yalıhüyük",
+      "Yunak"
+    ],
+    "Kütahya": [
+      "Altıntaş",
+      "Aslanapa",
+      "Çavdarhisar",
+      "Domaniç",
+      "Dumlupınar",
+      "Emet",
+      "Gediz",
+      "Hisarcık",
+      "Merkez",
+      "Pazarlar",
+      "Şaphane",
+      "Simav",
+      "Tavşanlı"
+    ],
+    "Malatya": [
+      "Akçadağ",
+      "Arapgir",
+      "Arguvan",
+      "Battalgazi",
+      "Darende",
+      "Doğanşehir",
+      "Doğanyol",
+      "Hekimhan",
+      "Kale",
+      "Kuluncak",
+      "Pütürge",
+      "Yazıhan",
+      "Yeşilyurt"
+    ],
+    "Manisa": [
+      "Ahmetli",
+      "Akhisar",
+      "Alaşehir",
+      "Demirci",
+      "Gölmarmara",
+      "Gördes",
+      "Kırkağaç",
+      "Köprübaşı",
+      "Kula",
+      "Salihli",
+      "Sarıgöl",
+      "Saruhanlı",
+      "Selendi",
+      "Soma",
+      "Şehzadeler",
+      "Turgutlu",
+      "Yunusemre"
+    ],
+    "Kahramanmaraş": [
+      "Afşin",
+      "Andırın",
+      "Çağlayancerit",
+      "Dulkadiroğlu",
+      "Ekinözü",
+      "Elbistan",
+      "Göksun",
+      "Nurhak",
+      "Onikişubat",
+      "Pazarcık",
+      "Türkoğlu"
+    ],
+    "Mardin": [
+      "Artuklu",
+      "Dargeçit",
+      "Derik",
+      "Kızıltepe",
+      "Mazıdağı",
+      "Midyat",
+      "Nusaybin",
+      "Ömerli",
+      "Savur",
+      "Yeşilli"
+    ],
+    "Muğla": [
+      "Bodrum",
+      "Dalaman",
+      "Datça",
+      "Fethiye",
+      "Kavaklıdere",
+      "Köyceğiz",
+      "Marmaris",
+      "Menteşe",
+      "Milas",
+      "Ortaca",
+      "Seydikemer",
+      "Ula",
+      "Yatağan"
+    ],
     "Muş": ["Bulanık", "Hasköy", "Korkut", "Malazgirt", "Merkez", "Varto"],
-    "Nevşehir": ["Acıgöl", "Avanos", "Derinkuyu", "Gülşehir", "Hacıbektaş", "Kozaklı", "Merkez", "Ürgüp"],
+    "Nevşehir": [
+      "Acıgöl",
+      "Avanos",
+      "Derinkuyu",
+      "Gülşehir",
+      "Hacıbektaş",
+      "Kozaklı",
+      "Merkez",
+      "Ürgüp"
+    ],
     "Niğde": ["Altunhisar", "Bor", "Çamardı", "Çiftlik", "Merkez", "Ulukışla"],
-    "Ordu": ["Akkuş", "Altınordu", "Aybastı", "Çamaş", "Çatalpınar", "Çaybaşı", "Fatsa", "Gölköy", "Gülyalı", "Gürgentepe", "İkizce", "Kabadüz", "Kabataş", "Korgan", "Kumru", "Mescudiye", "Ünye", "Ulubey"],
-    "Rize": ["Ardeşen", "Çamlıhemşin", "Çayeli", "Derepazarı", "Fındıklı", "Güneysu", "Hemşin", "İkizdere", "İyidere", "Kalkandere", "Merkez", "Pazar"],
-    "Sakarya": ["Adapazarı", "Akyazı", "Arifiye", "Erenler", "Ferizli", "Geyve", "Hendek", "Karapürçek", "Karasu", "Kaynarca", "Kocaali", "Pamukova", "Sapanca", "Serdivan", "Söğütlü", "Taraklı"],
-    "Samsun": ["19 Mayıs", "Alaçam", "Asarcık", "Atakum", "Bafra", "Canik", "Çarşamba", "Havza", "İlkadım", "Kavak", "Ladik", "Salıpazarı", "Tekkeköy", "Terme", "Vezirköprü", "Yakakent"],
-    "Siirt": ["Baykan", "Eruh", "Kurtalan", "Merkez", "Pervari", "Şirvan", "Tillo"],
-    "Sinop": ["Boyabat", "Dikmen", "Durağan", "Erfelek", "Gerze", "Merkez", "Saraydüzü", "Türkeli"],
-    "Sivas": ["Akıncılar", "Altınyayla", "Divriği", "Doğanşar", "Gemerek", "Gölova", "Gürün", "Hafik", "İmranlı", "Kangal", "Koyulhisar", "Merkez", "Suşehri", "Şarkışla", "Ulaş", "Yıldızeli", "Zara"],
-    "Tekirdağ": ["Çerkezköy", "Çorlu", "Ergene", "Hayrabolu", "Kapaklı", "Malkara", "Marmaraereğlisi", "Muratlı", "Saray", "Süleymanpaşa", "Şarköy"],
-    "Tokat": ["Almus", "Artova", "Başçiftlik", "Erbaa", "Merkez", "Niksar", "Pazar", "Reşadiye", "Sulusaray", "Yeşilyurt", "Zile"],
-    "Trabzon": ["Akçaabat", "Araklı", "Arsin", "Beşikdüzü", "Çarşıbaşı", "Çaykara", "Dernekpazarı", "Düzköy", "Hayrat", "Köprübaşı", "Maçka", "Of", "Ortahisar", "Sürmene", "Şalpazarı", "Tonya", "Vakfıkebir", "Yomra"],
-    "Tunceli": ["Çemişgezek", "Hozat", "Mazgirt", "Nazımiye", "Ovacık", "Pertek", "Pülümür", "Merkez"],
-    "Şanlıurfa": ["Akçakale", "Birecik", "Bozova", "Ceylanpınar", "Eyyübiye", "Halfeti", "Haliliye", "Harran", "Hilvan", "Karaköprü", "Siverek", "Suruç", "Viranşehir"],
+    "Ordu": [
+      "Akkuş",
+      "Altınordu",
+      "Aybastı",
+      "Çamaş",
+      "Çatalpınar",
+      "Çaybaşı",
+      "Fatsa",
+      "Gölköy",
+      "Gülyalı",
+      "Gürgentepe",
+      "İkizce",
+      "Kabadüz",
+      "Kabataş",
+      "Korgan",
+      "Kumru",
+      "Mescudiye",
+      "Ünye",
+      "Ulubey"
+    ],
+    "Rize": [
+      "Ardeşen",
+      "Çamlıhemşin",
+      "Çayeli",
+      "Derepazarı",
+      "Fındıklı",
+      "Güneysu",
+      "Hemşin",
+      "İkizdere",
+      "İyidere",
+      "Kalkandere",
+      "Merkez",
+      "Pazar"
+    ],
+    "Sakarya": [
+      "Adapazarı",
+      "Akyazı",
+      "Arifiye",
+      "Erenler",
+      "Ferizli",
+      "Geyve",
+      "Hendek",
+      "Karapürçek",
+      "Karasu",
+      "Kaynarca",
+      "Kocaali",
+      "Pamukova",
+      "Sapanca",
+      "Serdivan",
+      "Söğütlü",
+      "Taraklı"
+    ],
+    "Samsun": [
+      "19 Mayıs",
+      "Alaçam",
+      "Asarcık",
+      "Atakum",
+      "Bafra",
+      "Canik",
+      "Çarşamba",
+      "Havza",
+      "İlkadım",
+      "Kavak",
+      "Ladik",
+      "Salıpazarı",
+      "Tekkeköy",
+      "Terme",
+      "Vezirköprü",
+      "Yakakent"
+    ],
+    "Siirt": [
+      "Baykan",
+      "Eruh",
+      "Kurtalan",
+      "Merkez",
+      "Pervari",
+      "Şirvan",
+      "Tillo"
+    ],
+    "Sinop": [
+      "Boyabat",
+      "Dikmen",
+      "Durağan",
+      "Erfelek",
+      "Gerze",
+      "Merkez",
+      "Saraydüzü",
+      "Türkeli"
+    ],
+    "Sivas": [
+      "Akıncılar",
+      "Altınyayla",
+      "Divriği",
+      "Doğanşar",
+      "Gemerek",
+      "Gölova",
+      "Gürün",
+      "Hafik",
+      "İmranlı",
+      "Kangal",
+      "Koyulhisar",
+      "Merkez",
+      "Suşehri",
+      "Şarkışla",
+      "Ulaş",
+      "Yıldızeli",
+      "Zara"
+    ],
+    "Tekirdağ": [
+      "Çerkezköy",
+      "Çorlu",
+      "Ergene",
+      "Hayrabolu",
+      "Kapaklı",
+      "Malkara",
+      "Marmaraereğlisi",
+      "Muratlı",
+      "Saray",
+      "Süleymanpaşa",
+      "Şarköy"
+    ],
+    "Tokat": [
+      "Almus",
+      "Artova",
+      "Başçiftlik",
+      "Erbaa",
+      "Merkez",
+      "Niksar",
+      "Pazar",
+      "Reşadiye",
+      "Sulusaray",
+      "Yeşilyurt",
+      "Zile"
+    ],
+    "Trabzon": [
+      "Akçaabat",
+      "Araklı",
+      "Arsin",
+      "Beşikdüzü",
+      "Çarşıbaşı",
+      "Çaykara",
+      "Dernekpazarı",
+      "Düzköy",
+      "Hayrat",
+      "Köprübaşı",
+      "Maçka",
+      "Of",
+      "Ortahisar",
+      "Sürmene",
+      "Şalpazarı",
+      "Tonya",
+      "Vakfıkebir",
+      "Yomra"
+    ],
+    "Tunceli": [
+      "Çemişgezek",
+      "Hozat",
+      "Mazgirt",
+      "Nazımiye",
+      "Ovacık",
+      "Pertek",
+      "Pülümür",
+      "Merkez"
+    ],
+    "Şanlıurfa": [
+      "Akçakale",
+      "Birecik",
+      "Bozova",
+      "Ceylanpınar",
+      "Eyyübiye",
+      "Halfeti",
+      "Haliliye",
+      "Harran",
+      "Hilvan",
+      "Karaköprü",
+      "Siverek",
+      "Suruç",
+      "Viranşehir"
+    ],
     "Uşak": ["Banaz", "Eşme", "Karahallı", "Merkez", "Sivaslı", "Ulubey"],
-    "Van": ["Bahçesaray", "Başkale", "Çaldıran", "Çatak", "Edremit", "Erciş", "Gevaş", "Gürpınar", "İpekyolu", "Muradiye", "Özalp", "Saray", "Tuşba"],
-    "Yozgat": ["Akdağmadeni", "Aydıncık", "Boğazlıyan", "Çandır", "Çayıralan", "Çekerek", "Kadışehri", "Merkez", "Saraykent", "Sarıkaya", "Sorgun", "Şefaatli", "Yenifakılı", "Yerköy"],
-    "Zonguldak": ["Alaplı", "Çaycuma", "Devrek", "Gökçebey", "Kilimli", "Kozlu", "Merkez"],
-    "Aksaray": ["Ağaçören", "Eskil", "Gülağaç", "Güzelyurt", "Merkez", "Ortaköy", "Sarıyahşi", "Sultanhanı"],
+    "Van": [
+      "Bahçesaray",
+      "Başkale",
+      "Çaldıran",
+      "Çatak",
+      "Edremit",
+      "Erciş",
+      "Gevaş",
+      "Gürpınar",
+      "İpekyolu",
+      "Muradiye",
+      "Özalp",
+      "Saray",
+      "Tuşba"
+    ],
+    "Yozgat": [
+      "Akdağmadeni",
+      "Aydıncık",
+      "Boğazlıyan",
+      "Çandır",
+      "Çayıralan",
+      "Çekerek",
+      "Kadışehri",
+      "Merkez",
+      "Saraykent",
+      "Sarıkaya",
+      "Sorgun",
+      "Şefaatli",
+      "Yenifakılı",
+      "Yerköy"
+    ],
+    "Zonguldak": [
+      "Alaplı",
+      "Çaycuma",
+      "Devrek",
+      "Gökçebey",
+      "Kilimli",
+      "Kozlu",
+      "Merkez"
+    ],
+    "Aksaray": [
+      "Ağaçören",
+      "Eskil",
+      "Gülağaç",
+      "Güzelyurt",
+      "Merkez",
+      "Ortaköy",
+      "Sarıyahşi",
+      "Sultanhanı"
+    ],
     "Bayburt": ["Aydıntepe", "Demirözü", "Merkez"],
-    "Karaman": ["Ayrancı", "Başyayla", "Ermenek", "Kazımkarabekir", "Merkez", "Sarıveliler"],
-    "Kırıkkale": ["Bahşılı", "Balışeyh", "Çelebi", "Delice", "Karakeçili", "Keskin", "Merkez", "Sulakyurt", "Yahşihan"],
+    "Karaman": [
+      "Ayrancı",
+      "Başyayla",
+      "Ermenek",
+      "Kazımkarabekir",
+      "Merkez",
+      "Sarıveliler"
+    ],
+    "Kırıkkale": [
+      "Bahşılı",
+      "Balışeyh",
+      "Çelebi",
+      "Delice",
+      "Karakeçili",
+      "Keskin",
+      "Merkez",
+      "Sulakyurt",
+      "Yahşihan"
+    ],
     "Batman": ["Beşiri", "Gercüş", "Hasankeyf", "Kozluk", "Merkez", "Sason"],
-    "Şırnak": ["Beytüşşebap", "Cizre", "Güçlükonak", "İdil", "Merkez", "Silopi", "Uludere"],
+    "Şırnak": [
+      "Beytüşşebap",
+      "Cizre",
+      "Güçlükonak",
+      "İdil",
+      "Merkez",
+      "Silopi",
+      "Uludere"
+    ],
     "Bartın": ["Amasra", "Kurucaşile", "Merkez", "Ulus"],
     "Ardahan": ["Çıldır", "Damal", "Göle", "Hanak", "Merkez", "Posof"],
     "Iğdır": ["Aralık", "Karakoyunlu", "Merkez", "Tuzluca"],
-    "Yalova": ["Altınova", "Armutlu", "Çınarcık", "Çiftlikköy", "Merkez", "Termal"],
-    "Karabük": ["Eflani", "Eskipazar", "Merkez", "Ovacık", "Safranbolu", "Yenice"],
+    "Yalova": [
+      "Altınova",
+      "Armutlu",
+      "Çınarcık",
+      "Çiftlikköy",
+      "Merkez",
+      "Termal"
+    ],
+    "Karabük": [
+      "Eflani",
+      "Eskipazar",
+      "Merkez",
+      "Ovacık",
+      "Safranbolu",
+      "Yenice"
+    ],
     "Kilis": ["Elbeyli", "Merkez", "Musabeyli", "Polateli"],
-    "Osmaniye": ["Bahçe", "Düziçi", "Hasanbeyli", "Kadirli", "Merkez", "Sumbas", "Toprakkale"],
-    "Düzce": ["Akçakoca", "Cumayeri", "Çilimli", "Gölyaka", "Gümüşova", "Kaynaşlı", "Merkez", "Yığılca"]
+    "Osmaniye": [
+      "Bahçe",
+      "Düziçi",
+      "Hasanbeyli",
+      "Kadirli",
+      "Merkez",
+      "Sumbas",
+      "Toprakkale"
+    ],
+    "Düzce": [
+      "Akçakoca",
+      "Cumayeri",
+      "Çilimli",
+      "Gölyaka",
+      "Gümüşova",
+      "Kaynaşlı",
+      "Merkez",
+      "Yığılca"
+    ]
   };
 
   static List<String> get iller {
@@ -305,34 +1563,84 @@ class TurkiyeSehirler {
 // ==================== ONLİNE DUA/AYET/HADİS/ESMA SERVİSİ ====================
 class OnlineIcerikServisi {
   static const List<Map<String, String>> zenginAyetler = [
-    {"ayet": "Şüphesiz güçlükle beraber bir kolaylık vardır. Gerçekten, güçlükle beraber bir kolaylık vardır.", "sure": "İnşirah Sûresi, 5-6"},
-    {"ayet": "Bilesiniz ki, kalpler ancak Allah'ı anmakla huzur bulur.", "sure": "Ra'd Sûresi, 28"},
-    {"ayet": "Ey iman edenler! Sabır ve namaz ile Allah'tan yardım isteyin. Çünkü Allah sabredenlerle beraberdir.", "sure": "Bakara Sûresi, 153"},
-    {"ayet": "Eğer şükrederseniz, elbette size nimetimi artırırım.", "sure": "İbrahim Sûresi, 7"},
-    {"ayet": "Rabbimiz! Bize dünyada da iyilik ver, ahirette de iyilik ver ve bizi cehennem azabından koru.", "sure": "Bakara Sûresi, 201"},
-    {"ayet": "Kullarıma söyle: En güzel sözü söylesinler. Çünkü şeytan aralarını bozmaya çalışır.", "sure": "İsrâ Sûresi, 53"},
-    {"ayet": "Nerede olursanız olun O sizinle beraberdir. Allah yaptıklarınızı hakkıyla görendir.", "sure": "Hadîd Sûresi, 4"},
+    {
+      "ayet":
+          "Şüphesiz güçlükle beraber bir kolaylık vardır. Gerçekten, güçlükle beraber bir kolaylık vardır.",
+      "sure": "İnşirah Sûresi, 5-6"
+    },
+    {
+      "ayet": "Bilesiniz ki, kalpler ancak Allah'ı anmakla huzur bulur.",
+      "sure": "Ra'd Sûresi, 28"
+    },
+    {
+      "ayet":
+          "Ey iman edenler! Sabır ve namaz ile Allah'tan yardım isteyin. Çünkü Allah sabredenlerle beraberdir.",
+      "sure": "Bakara Sûresi, 153"
+    },
+    {
+      "ayet": "Eğer şükrederseniz, elbette size nimetimi artırırım.",
+      "sure": "İbrahim Sûresi, 7"
+    },
+    {
+      "ayet":
+          "Rabbimiz! Bize dünyada da iyilik ver, ahirette de iyilik ver ve bizi cehennem azabından koru.",
+      "sure": "Bakara Sûresi, 201"
+    },
+    {
+      "ayet":
+          "Kullarıma söyle: En güzel sözü söylesinler. Çünkü şeytan aralarını bozmaya çalışır.",
+      "sure": "İsrâ Sûresi, 53"
+    },
+    {
+      "ayet":
+          "Nerede olursanız olun O sizinle beraberdir. Allah yaptıklarınızı hakkıyla görendir.",
+      "sure": "Hadîd Sûresi, 4"
+    },
   ];
 
   static const List<Map<String, String>> zenginHadisler = [
-    {"hadis": "Namaz, dinin direğidir. Onu kılan dinini ihya etmiş, terk eden ise dinini yıkmış olur.", "kaynak": "Tirmizî, İman 8"},
-    {"hadis": "Sizin en hayırlınız, ahlakı en güzel olanınızdır.", "kaynak": "Buhârî, Edeb 38"},
-    {"hadis": "Müslüman, elinden ve dilinden diğer müslümanların güvende olduğu kimsedir.", "kaynak": "Buhârî, İman 4"},
-    {"hadis": "Kolaylaştırınız, zorlaştırmayınız; müjdeleyiniz, nefret ettirmeyiniz.", "kaynak": "Buhârî, İlim 11"},
-    {"hadis": "Hiçbir baba, çocuğuna güzel ahlaktan daha üstün bir miras bırakamaz.", "kaynak": "Tirmizî, Birr 33"},
+    {
+      "hadis":
+          "Namaz, dinin direğidir. Onu kılan dinini ihya etmiş, terk eden ise dinini yıkmış olur.",
+      "kaynak": "Tirmizî, İman 8"
+    },
+    {
+      "hadis": "Sizin en hayırlınız, ahlakı en güzel olanınızdır.",
+      "kaynak": "Buhârî, Edeb 38"
+    },
+    {
+      "hadis":
+          "Müslüman, elinden ve dilinden diğer müslümanların güvende olduğu kimsedir.",
+      "kaynak": "Buhârî, İman 4"
+    },
+    {
+      "hadis":
+          "Kolaylaştırınız, zorlaştırmayınız; müjdeleyiniz, nefret ettirmeyiniz.",
+      "kaynak": "Buhârî, İlim 11"
+    },
+    {
+      "hadis":
+          "Hiçbir baba, çocuğuna güzel ahlaktan daha üstün bir miras bırakamaz.",
+      "kaynak": "Tirmizî, Birr 33"
+    },
     {"hadis": "Veren el, alan elden hayırlıdır.", "kaynak": "Buhârî, Zekât 18"},
   ];
 
   static const List<Map<String, String>> zenginDualar = [
     {
-      "arapca": "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ",
-      "okunusu": "Rabbena atina fid-dunya haseneten ve fil-ahirati haseneten ve qina 'azaben-nar.",
-      "anlamı": "Rabbimiz! Bize dünyada da iyilik ver, ahirette de iyilik ver ve bizi cehennem azabından koru."
+      "arapca":
+          "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ",
+      "okunusu":
+          "Rabbena atina fid-dunya haseneten ve fil-ahirati haseneten ve qina 'azaben-nar.",
+      "anlamı":
+          "Rabbimiz! Bize dünyada da iyilik ver, ahirette de iyilik ver ve bizi cehennem azabından koru."
     },
     {
-      "arapca": "اللَّهُمَّ إِنِّي أَسْأَلُكَ الْهُدَى وَالتُّقَى وَالْعَفَافَ وَالْغِنَى",
+      "arapca":
+          "اللَّهُمَّ إِنِّي أَسْأَلُكَ الْهُدَى وَالتُّقَى وَالْعَفَافَ وَالْغِنَى",
       "okunusu": "Allahümme inni es-elükel-hüda vet-tuqa vel-'afafe vel-ghina.",
-      "anlamı": "Allah'ım! Senden hidayet, takva, iffet ve gönül zenginliği istiyorum."
+      "anlamı":
+          "Allah'ım! Senden hidayet, takva, iffet ve gönül zenginliği istiyorum."
     },
     {
       "arapca": "رَبِّ اشْرَحْ لِي صَدْرِي وَيَسِّرْ لِي أَمْرِي",
@@ -347,18 +1655,39 @@ class OnlineIcerikServisi {
   ];
 
   static const List<Map<String, String>> zenginEsmalar = [
-    {"esma": "Er-Rahmân (الرَّحْمَنُ)", "anlam": "Dünyada inanan inanmayan bütün canlılara merhamet gösteren mutlak lütuf sahibi."},
-    {"esma": "Er-Rahîm (الرَّحِيمُ)", "anlam": "Ahirette sadece müminlere ebedi merhamet ve ihsanda bulunan."},
-    {"esma": "El-Melik (الْمَلِكُ)", "anlam": "Mülkün, evrenin ve bütün varlıkların tek ve mutlak sahibi."},
-    {"esma": "El-Kuddûs (الْقُدُّوسُ)", "anlam": "Bütün noksanlıklardan münezzeh, pek kutsal ve tertemiz olan."},
-    {"esma": "Es-Selâm (السَّلاَمُ)", "anlam": "Esenlik veren, yarattıklarını tehlikelerden selamete çıkaran."},
-    {"esma": "El-Mü'min (الْمُؤْمِنُ)", "anlam": "Gönüllere iman ve huzur veren, sığınanları emniyette kılan."},
+    {
+      "esma": "Er-Rahmân (الرَّحْمَنُ)",
+      "anlam":
+          "Dünyada inanan inanmayan bütün canlılara merhamet gösteren mutlak lütuf sahibi."
+    },
+    {
+      "esma": "Er-Rahîm (الرَّحِيمُ)",
+      "anlam": "Ahirette sadece müminlere ebedi merhamet ve ihsanda bulunan."
+    },
+    {
+      "esma": "El-Melik (الْمَلِكُ)",
+      "anlam": "Mülkün, evrenin ve bütün varlıkların tek ve mutlak sahibi."
+    },
+    {
+      "esma": "El-Kuddûs (الْقُدُّوسُ)",
+      "anlam": "Bütün noksanlıklardan münezzeh, pek kutsal ve tertemiz olan."
+    },
+    {
+      "esma": "Es-Selâm (السَّلاَمُ)",
+      "anlam": "Esenlik veren, yarattıklarını tehlikelerden selamete çıkaran."
+    },
+    {
+      "esma": "El-Mü'min (الْمُؤْمِنُ)",
+      "anlam": "Gönüllere iman ve huzur veren, sığınanları emniyette kılan."
+    },
   ];
 
   static Future<Map<String, dynamic>> getGununIcerikleri() async {
     final gunHash = DateTime.now().year * 1000 + DateTime.now().dayOfYear();
     try {
-      final res = await http.get(Uri.parse('https://api.alquran.cloud/v1/ayah/random/tr.yazir')).timeout(const Duration(seconds: 4));
+      final res = await http
+          .get(Uri.parse('https://api.alquran.cloud/v1/ayah/random/tr.yazir'))
+          .timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['code'] == 200 && data['data'] != null) {
@@ -409,6 +1738,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('tr_TR', null);
   tz_data.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Europe/Istanbul'));
 
   if (!kIsWeb) {
     try {
@@ -456,6 +1786,44 @@ void main() async {
   runApp(const MyApp());
 }
 
+// ==================== APP THEME SCOPE (INHERITED WIDGET) ====================
+class AppThemeScope extends InheritedWidget {
+  final AppThemeData themeData;
+  final AppThemeMode themeMode;
+  final bool isDark;
+  final double fontScale;
+  final Function(AppThemeMode, bool) onThemeChanged;
+  final Function(double) onFontScaleChanged;
+
+  const AppThemeScope({
+    super.key,
+    required this.themeData,
+    required this.themeMode,
+    required this.isDark,
+    required this.fontScale,
+    required this.onThemeChanged,
+    required this.onFontScaleChanged,
+    required super.child,
+  });
+
+  static AppThemeScope of(BuildContext context) {
+    final result = context.dependOnInheritedWidgetOfExactType<AppThemeScope>();
+    assert(result != null, 'AppThemeScope context ulaşılamadı');
+    return result!;
+  }
+
+  static AppThemeScope? ofMaybe(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<AppThemeScope>();
+  }
+
+  @override
+  bool updateShouldNotify(AppThemeScope oldWidget) {
+    return themeMode != oldWidget.themeMode ||
+        isDark != oldWidget.isDark ||
+        fontScale != oldWidget.fontScale;
+  }
+}
+
 // ==================== MYAPP ====================
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -465,7 +1833,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  AppThemeMode _currentTheme = AppThemeMode.rose; // Varsayılan Pembe Açılış Teması
+  AppThemeMode _currentTheme = AppThemeMode.rose;
   bool _isDarkMode = false;
   double _fontScale = 1.0;
   bool _isFirstLaunch = true;
@@ -535,73 +1903,217 @@ class _MyAppState extends State<MyApp> {
 
     final themeData = AppThemeData.getTheme(_currentTheme);
     final primaryColor = themeData.primary;
+    final cardBg = _isDarkMode ? themeData.cardDark : themeData.cardLight;
+    final bg =
+        _isDarkMode ? themeData.backgroundDark : themeData.backgroundLight;
+    final textColor = _isDarkMode ? themeData.textDark : themeData.textLight;
 
-    return MaterialApp(
-      title: 'Ezan Vakti 🌸',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: _isDarkMode ? Brightness.dark : Brightness.light,
-        primaryColor: primaryColor,
-        scaffoldBackgroundColor: _isDarkMode
-            ? themeData.backgroundDark
-            : themeData.backgroundLight,
-        fontFamily: 'Schyler',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: primaryColor,
+    return AppThemeScope(
+      themeData: themeData,
+      themeMode: _currentTheme,
+      isDark: _isDarkMode,
+      fontScale: _fontScale,
+      onThemeChanged: _updateTheme,
+      onFontScaleChanged: _updateFontScale,
+      child: MaterialApp(
+        title: 'Ezan Vakti 🌸',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
           brightness: _isDarkMode ? Brightness.dark : Brightness.light,
-          primary: primaryColor,
-          secondary: themeData.secondary,
-          surface: _isDarkMode ? themeData.cardDark : themeData.cardLight,
-        ),
-        chipTheme: ChipThemeData(
-          backgroundColor: _isDarkMode ? themeData.cardDark : themeData.cardLight,
-          selectedColor: primaryColor.withValues(alpha: 0.35),
-          secondarySelectedColor: primaryColor,
-          labelStyle: TextStyle(color: _isDarkMode ? themeData.textDark : themeData.primary),
-        ),
-        switchTheme: SwitchThemeData(
-          thumbColor: WidgetStateProperty.all(primaryColor),
-          trackColor: WidgetStateProperty.all(primaryColor.withValues(alpha: 0.3)),
-        ),
-        sliderTheme: SliderThemeData(
-          activeTrackColor: primaryColor,
-          thumbColor: primaryColor,
-          overlayColor: primaryColor.withValues(alpha: 0.2),
-        ),
-        useMaterial3: true,
-      ),
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(_fontScale),
+          primaryColor: primaryColor,
+          scaffoldBackgroundColor: bg,
+          fontFamily: 'Schyler',
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: primaryColor,
+            brightness: _isDarkMode ? Brightness.dark : Brightness.light,
+            primary: primaryColor,
+            secondary: themeData.secondary,
+            surface: cardBg,
+            onPrimary: Colors.white,
+            onSurface: textColor,
           ),
-          child: child!,
-        );
-      },
-      home: _isFirstLaunch
-          ? OnboardingScreen(
-              themeData: themeData,
-              isDark: _isDarkMode,
-              onCompleted: _completeOnboarding,
-            )
-          : SplashScreen(
-              currentTheme: _currentTheme,
-              isDarkMode: _isDarkMode,
-              fontScale: _fontScale,
-              onThemeChanged: _updateTheme,
-              onFontScaleChanged: _updateFontScale,
-              onOpenOnboarding: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => OnboardingScreen(
-                      themeData: themeData,
-                      isDark: _isDarkMode,
-                      onCompleted: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                );
-              },
+          textTheme: TextTheme(
+            displayLarge: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            displayMedium: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            displaySmall: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            headlineLarge: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            headlineMedium: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            headlineSmall: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            titleLarge: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            titleMedium: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            titleSmall: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.bold),
+            bodyLarge: TextStyle(color: textColor, fontFamily: 'Schyler'),
+            bodyMedium: TextStyle(
+                color: textColor.withValues(alpha: 0.9), fontFamily: 'Schyler'),
+            bodySmall: TextStyle(
+                color: textColor.withValues(alpha: 0.7), fontFamily: 'Schyler'),
+            labelLarge: TextStyle(
+                color: textColor,
+                fontFamily: 'Schyler',
+                fontWeight: FontWeight.w500),
+            labelMedium: TextStyle(
+                color: textColor.withValues(alpha: 0.9), fontFamily: 'Schyler'),
+            labelSmall: TextStyle(
+                color: textColor.withValues(alpha: 0.7), fontFamily: 'Schyler'),
+          ),
+          appBarTheme: AppBarTheme(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            iconTheme: IconThemeData(color: primaryColor),
+            titleTextStyle: TextStyle(
+                color: textColor,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Schyler'),
+          ),
+          cardTheme: CardThemeData(
+            color: cardBg,
+            elevation: 4,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          ),
+          dialogTheme: DialogThemeData(
+            backgroundColor: cardBg,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            titleTextStyle: TextStyle(
+                color: textColor,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Schyler'),
+            contentTextStyle: TextStyle(
+                color: textColor.withValues(alpha: 0.9),
+                fontSize: 16,
+                fontFamily: 'Schyler'),
+          ),
+          bottomNavigationBarTheme: BottomNavigationBarThemeData(
+            backgroundColor: cardBg,
+            selectedItemColor: primaryColor,
+            unselectedItemColor: _isDarkMode ? Colors.white38 : Colors.black38,
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          navigationBarTheme: NavigationBarThemeData(
+            backgroundColor: cardBg,
+            indicatorColor: primaryColor.withValues(alpha: 0.3),
+            iconTheme: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return IconThemeData(color: primaryColor);
+              }
+              return IconThemeData(
+                  color: _isDarkMode ? Colors.white38 : Colors.black38);
+            }),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(
+              foregroundColor: primaryColor,
+            ),
+          ),
+          outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: primaryColor,
+              side: BorderSide(color: primaryColor),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+            ),
+          ),
+          iconTheme: IconThemeData(color: primaryColor),
+          dividerTheme: DividerThemeData(
+            color: _isDarkMode ? Colors.white12 : Colors.black12,
+          ),
+          chipTheme: ChipThemeData(
+            backgroundColor: cardBg,
+            selectedColor: primaryColor.withValues(alpha: 0.35),
+            secondarySelectedColor: primaryColor,
+            labelStyle:
+                TextStyle(color: textColor, fontWeight: FontWeight.bold),
+          ),
+          switchTheme: SwitchThemeData(
+            thumbColor: WidgetStateProperty.all(primaryColor),
+            trackColor:
+                WidgetStateProperty.all(primaryColor.withValues(alpha: 0.3)),
+          ),
+          sliderTheme: SliderThemeData(
+            activeTrackColor: primaryColor,
+            thumbColor: primaryColor,
+            overlayColor: primaryColor.withValues(alpha: 0.2),
+          ),
+          bottomSheetTheme: BottomSheetThemeData(
+            backgroundColor: cardBg,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+            ),
+          ),
+        ),
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(_fontScale),
+            ),
+            child: child!,
+          );
+        },
+        home: _isFirstLaunch
+            ? OnboardingScreen(
+                themeData: themeData,
+                isDark: _isDarkMode,
+                onCompleted: _completeOnboarding,
+              )
+            : SplashScreen(
+                currentTheme: _currentTheme,
+                isDarkMode: _isDarkMode,
+                fontScale: _fontScale,
+                onThemeChanged: _updateTheme,
+                onFontScaleChanged: _updateFontScale,
+                onOpenOnboarding: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => OnboardingScreen(
+                        themeData: themeData,
+                        isDark: _isDarkMode,
+                        onCompleted: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }
@@ -644,13 +2156,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       "icon": "🌳",
       "title": "Büyüyen Zikir Ormanı",
       "subtitle": "Her 33 Zikirde Büyüyen Ağaçlar",
-      "desc": "1000 zikre kadar adım adım büyüyen dev ağacınız ve kişiselleştirilebilir zikir hedefleri.",
+      "desc":
+          "1000 zikre kadar adım adım büyüyen dev ağacınız ve kişiselleştirilebilir zikir hedefleri.",
     },
     {
       "icon": "🕋",
       "title": "Diyanet Kur'an & Çeşitli Kıble API",
       "subtitle": "Çoklu Kıble Seçeneği & Diyanet Mushaf",
-      "desc": "Google, Al-Adhan veya Diyanet kıble seçenekleriyle yönünüzü bulun.",
+      "desc":
+          "Google, Al-Adhan veya Diyanet kıble seçenekleriyle yönünüzü bulun.",
     },
   ];
 
@@ -719,7 +2233,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white.withValues(alpha: 0.9) : Colors.black87,
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.9)
+                                  : Colors.black87,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -989,8 +2505,8 @@ class IosGlassCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry margin;
   final BorderRadius? borderRadius;
-  final bool isDark;
-  final AppThemeData themeData;
+  final bool? isDark;
+  final AppThemeData? themeData;
   final VoidCallback? onTap;
 
   const IosGlassCard({
@@ -999,15 +2515,25 @@ class IosGlassCard extends StatelessWidget {
     this.padding = const EdgeInsets.all(16),
     this.margin = const EdgeInsets.only(bottom: 12),
     this.borderRadius,
-    required this.isDark,
-    required this.themeData,
+    this.isDark,
+    this.themeData,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final scope = AppThemeScope.ofMaybe(context);
+    final effectiveIsDark = isDark ??
+        scope?.isDark ??
+        (Theme.of(context).brightness == Brightness.dark);
+    final effectiveTheme = themeData ??
+        scope?.themeData ??
+        AppThemeData.getTheme(AppThemeMode.rose);
+
     final br = borderRadius ?? BorderRadius.circular(24);
-    final cardGrad = isDark ? themeData.cardGradientDark : themeData.cardGradientLight;
+    final cardGrad = effectiveIsDark
+        ? effectiveTheme.cardGradientDark
+        : effectiveTheme.cardGradientLight;
 
     return Container(
       margin: margin,
@@ -1033,16 +2559,16 @@ class IosGlassCard extends StatelessWidget {
                 ),
                 borderRadius: br,
                 border: Border.all(
-                  color: isDark
-                      ? themeData.primary.withValues(alpha: 0.50)
-                      : themeData.primary.withValues(alpha: 0.35),
+                  color: effectiveIsDark
+                      ? effectiveTheme.primary.withValues(alpha: 0.50)
+                      : effectiveTheme.primary.withValues(alpha: 0.35),
                   width: 1.4,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: isDark
+                    color: effectiveIsDark
                         ? Colors.black.withValues(alpha: 0.7)
-                        : themeData.primary.withValues(alpha: 0.15),
+                        : effectiveTheme.primary.withValues(alpha: 0.15),
                     blurRadius: 18,
                     offset: const Offset(0, 6),
                   )
@@ -1076,7 +2602,8 @@ class _KuranWebViewState extends State<KuranWebView> {
     if (!kIsWeb) {
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(widget.isDark ? const Color(0xFF18181B) : Colors.white)
+        ..setBackgroundColor(
+            widget.isDark ? const Color(0xFF18181B) : Colors.white)
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageFinished: (url) {
@@ -1138,7 +2665,8 @@ class _KibleWebViewState extends State<KibleWebView> {
       setState(() => _isLoading = true);
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(widget.isDark ? const Color(0xFF18181B) : Colors.white)
+        ..setBackgroundColor(
+            widget.isDark ? const Color(0xFF18181B) : Colors.white)
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageFinished: (finishedUrl) {
@@ -1203,7 +2731,8 @@ class _KibleWebViewState extends State<KibleWebView> {
           child: Stack(
             children: [
               WebViewWidget(controller: _controller!),
-              if (_isLoading) Center(child: CircularProgressIndicator(color: theme.primary)),
+              if (_isLoading)
+                Center(child: CircularProgressIndicator(color: theme.primary)),
             ],
           ),
         ),
@@ -1275,7 +2804,8 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
 
   void _zikriDeftereKaydet() {
     if (_counter == 0) return;
-    final zikIsim = _zikirler.isNotEmpty ? _zikirler[_seciliIndex]["ad"] : "Zikir";
+    final zikIsim =
+        _zikirler.isNotEmpty ? _zikirler[_seciliIndex]["ad"] : "Zikir";
     final agacObj = _getAgacDurumu(_counter);
     final tarih = DateFormat('d MMMM HH:mm', 'tr_TR').format(DateTime.now());
 
@@ -1303,10 +2833,15 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: widget.isDark ? widget.themeData.cardDark : widget.themeData.cardLight,
+        backgroundColor: widget.isDark
+            ? widget.themeData.cardDark
+            : widget.themeData.cardLight,
         title: Text(
           "Yeni Zikir Ekle 🌸",
-          style: TextStyle(color: widget.isDark ? widget.themeData.textDark : widget.themeData.primary),
+          style: TextStyle(
+              color: widget.isDark
+                  ? widget.themeData.textDark
+                  : widget.themeData.primary),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1316,7 +2851,8 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
               onChanged: (val) => ad = val,
             ),
             TextField(
-              decoration: const InputDecoration(labelText: "Özel Hedef Sayısı (Örn: 33, 99, 500)"),
+              decoration: const InputDecoration(
+                  labelText: "Özel Hedef Sayısı (Örn: 33, 99, 500)"),
               keyboardType: TextInputType.number,
               onChanged: (val) => hedef = int.tryParse(val) ?? 33,
             ),
@@ -1357,10 +2893,15 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: widget.isDark ? widget.themeData.cardDark : widget.themeData.cardLight,
+        backgroundColor: widget.isDark
+            ? widget.themeData.cardDark
+            : widget.themeData.cardLight,
         title: Text(
           "Hedef Sayısını Değiştir 🎯",
-          style: TextStyle(color: widget.isDark ? widget.themeData.textDark : widget.themeData.primary),
+          style: TextStyle(
+              color: widget.isDark
+                  ? widget.themeData.textDark
+                  : widget.themeData.primary),
         ),
         content: TextField(
           autofocus: true,
@@ -1400,9 +2941,36 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
     if (stageIndex > 200) stageIndex = 200;
 
     final List<String> agacEmojileri = [
-      "🌱", "🌿", "🪴", "🌳", "🌸", "🍎", "🌴", "🫒", "🫐", "🌲",
-      "🍇", "🍊", "🍐", "🥭", "🌺", "🪵", "🍁", "🌰", "🥑", "🌾",
-      "🌴✨", "🌳✨", "🌸✨", "🍎✨", "🫒✨", "👑🌳", "👑🌴", "👑🌸", "👑🍎", "👑🫒"
+      "🌱",
+      "🌿",
+      "🪴",
+      "🌳",
+      "🌸",
+      "🍎",
+      "🌴",
+      "🫒",
+      "🫐",
+      "🌲",
+      "🍇",
+      "🍊",
+      "🍐",
+      "🥭",
+      "🌺",
+      "🪵",
+      "🍁",
+      "🌰",
+      "🥑",
+      "🌾",
+      "🌴✨",
+      "🌳✨",
+      "🌸✨",
+      "🍎✨",
+      "🫒✨",
+      "👑🌳",
+      "👑🌴",
+      "👑🌸",
+      "👑🍎",
+      "👑🫒"
     ];
 
     String emoji = agacEmojileri[(stageIndex - 1) % agacEmojileri.length];
@@ -1414,8 +2982,8 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
     return {
       "emoji": emoji,
       "seviye": "Ağaç Seviyesi: $stageIndex / 200 (Her 33 Zikirde Yeni Ağaç)",
-      "mesaj": kalanZikir == 0 
-          ? "🎉 Tebrikler! 33 zikri tamamladın ve bu seviyedeki ağacı büyüttün!" 
+      "mesaj": kalanZikir == 0
+          ? "🎉 Tebrikler! 33 zikri tamamladın ve bu seviyedeki ağacı büyüttün!"
           : "Sonraki ağacın büyümesine son $kalanZikir zikir kaldı!",
     };
   }
@@ -1424,12 +2992,15 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
   Widget build(BuildContext context) {
     final theme = widget.themeData;
     final isDark = widget.isDark;
-    final mevcutzikir = _zikirler.isNotEmpty ? _zikirler[_seciliIndex] : {"ad": "Zikir", "hedef": 33};
+    final mevcutzikir = _zikirler.isNotEmpty
+        ? _zikirler[_seciliIndex]
+        : {"ad": "Zikir", "hedef": 33};
     final int hedefSayi = mevcutzikir["hedef"] ?? 33;
     final agac = _getAgacDurumu(_counter);
 
     int stageProgress = _counter % 33;
-    double progressVal = (_counter > 0 && stageProgress == 0) ? 1.0 : (stageProgress / 33.0);
+    double progressVal =
+        (_counter > 0 && stageProgress == 0) ? 1.0 : (stageProgress / 33.0);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),
@@ -1499,7 +3070,8 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
                       },
                     ),
                     IconButton(
-                      icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                      icon: const Icon(Icons.add_circle_outline,
+                          color: Colors.green),
                       onPressed: _yeniZikirEkleDiyalog,
                       tooltip: "Yeni Zikir Ekle",
                     ),
@@ -1517,11 +3089,13 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
                 InkWell(
                   onTap: _hedefDegistirDiyalog,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
                       color: theme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: theme.primary.withValues(alpha: 0.3)),
+                      border: Border.all(
+                          color: theme.primary.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1575,7 +3149,8 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.touch_app, color: Colors.white, size: 38),
+                          const Icon(Icons.touch_app,
+                              color: Colors.white, size: 38),
                           const SizedBox(height: 4),
                           Text(
                             mevcutzikir["ad"],
@@ -1606,8 +3181,10 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
                     ),
                     const SizedBox(width: 10),
                     OutlinedButton.icon(
-                      icon: const Icon(Icons.refresh, color: Colors.red, size: 18),
-                      label: const Text("Sıfırla", style: TextStyle(color: Colors.red)),
+                      icon: const Icon(Icons.refresh,
+                          color: Colors.red, size: 18),
+                      label: const Text("Sıfırla",
+                          style: TextStyle(color: Colors.red)),
                       onPressed: () {
                         setState(() => _counter = 0);
                       },
@@ -1615,7 +3192,8 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
                     if (_zikirler.length > 1) ...[
                       const SizedBox(width: 8),
                       IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.grey, size: 20),
+                        icon: const Icon(Icons.delete,
+                            color: Colors.grey, size: 20),
                         onPressed: () {
                           setState(() {
                             _zikirler.removeAt(_seciliIndex);
@@ -1652,7 +3230,8 @@ class _ZikirmatikPageState extends State<ZikirmatikPage> {
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: Text(log["agac"] ?? "🌳", style: const TextStyle(fontSize: 24)),
+                      leading: Text(log["agac"] ?? "🌳",
+                          style: const TextStyle(fontSize: 24)),
                       title: Text(
                         "${log['zikir']} - ${log['sayi']} Adet",
                         style: TextStyle(
@@ -1705,7 +3284,11 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
 
   String secilenSehir = "İstanbul";
   String secilenIlce = "Kadıköy";
-  List<String> kayitliSehirler = ["İstanbul (Kadıköy)", "Malatya (Yeşilyurt)", "Ankara (Çankaya)"];
+  List<String> kayitliSehirler = [
+    "İstanbul (Kadıköy)",
+    "Malatya (Yeşilyurt)",
+    "Ankara (Çankaya)"
+  ];
 
   Map<String, String> bugununVakitleri = {
     "İmsak": "--:--",
@@ -1721,6 +3304,12 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
   double _kacDakikaOnceSlider = 15.0;
   bool _bildirimCubugu = true;
   bool _bildirimDuaHadisEkle = true;
+  String _secilenDuvarKagidi = "papatya";
+  String _vakitKaynagi = 'Güncelleniyor';
+  DateTime? _lastWidgetSync;
+  final _prayerTimesService = PrayerTimesService();
+  late final _prayerNotificationService =
+      PrayerNotificationService(flutterLocalNotificationsPlugin);
 
   @override
   void initState() {
@@ -1742,75 +3331,40 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
   Future<void> ezanVakitleriniGetir() async {
     setState(() => isLoading = true);
     try {
-      final uri = Uri.parse(
-        'https://api.aladhan.com/v1/timingsByCity?city=${Uri.encodeComponent(secilenIlce)}&country=Turkey&method=13',
+      final result = await _prayerTimesService.getToday(
+        city: secilenSehir,
+        district: secilenIlce,
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 6));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['code'] == 200 && data['data'] != null && data['data']['timings'] != null) {
-          final timings = data['data']['timings'];
-          setState(() {
-            bugununVakitleri = {
-              "İmsak": timings["Fajr"] ?? "--:--",
-              "Güneş": timings["Sunrise"] ?? "--:--",
-              "Öğle": timings["Dhuhr"] ?? "--:--",
-              "İkindi": timings["Asr"] ?? "--:--",
-              "Akşam": timings["Maghrib"] ?? "--:--",
-              "Yatsı": timings["Isha"] ?? "--:--",
-            };
-            isLoading = false;
-          });
-          _hesaplaKalanSure();
-          return;
-        }
+      if (!mounted) return;
+      setState(() {
+        bugununVakitleri = result.timings;
+        _vakitKaynagi = switch (result.source) {
+          PrayerTimesSource.alAdhan => 'AlAdhan · Diyanet metodu',
+          PrayerTimesSource.cache => 'Bugünün kayıtlı verisi',
+          PrayerTimesSource.offlineCalculation => 'Çevrimdışı hesaplama',
+        };
+        isLoading = false;
+      });
+      try {
+        await _prayerNotificationService.scheduleToday(
+          timings: result.timings,
+          enabled: _vakitOncesiUyari,
+          minutesBefore: _kacDakikaOnceSlider.round(),
+        );
+      } on Exception catch (error) {
+        debugPrint('Bildirimler planlanamadı: $error');
       }
+      if (_bildirimCubugu) await updateVakitBilgiCubugu(result.timings);
+      _hesaplaKalanSure();
+      return;
     } catch (e) {
-      debugPrint("Primary Aladhan API Vakit hatası: $e");
+      debugPrint("Vakit verisi alınamadı: $e");
     }
-
-    try {
-      final uriFallback = Uri.parse(
-        'https://ezanvakti.herokuapp.com/vakitler?ilce=${Uri.encodeComponent(secilenIlce)}',
-      );
-      final response = await http.get(uriFallback).timeout(const Duration(seconds: 4));
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        if (data.isNotEmpty) {
-          final bugunData = data[0];
-          setState(() {
-            bugununVakitleri = {
-              "İmsak": bugunData["Imsak"] ?? "--:--",
-              "Güneş": bugunData["Gunes"] ?? "--:--",
-              "Öğle": bugunData["Ogle"] ?? "--:--",
-              "İkindi": bugunData["Ikindi"] ?? "--:--",
-              "Akşam": bugunData["Aksam"] ?? "--:--",
-              "Yatsı": bugunData["Yatsi"] ?? "--:--",
-            };
-            isLoading = false;
-          });
-          _hesaplaKalanSure();
-          return;
-        }
-      }
-    } catch (e) {
-      debugPrint("Fallback API hatası: $e");
-    }
-
+    if (!mounted) return;
     setState(() {
-      bugununVakitleri = {
-        "İmsak": "04:30",
-        "Güneş": "06:02",
-        "Öğle": "13:15",
-        "İkindi": "17:01",
-        "Akşam": "20:15",
-        "Yatsı": "21:40",
-      };
+      _vakitKaynagi = 'Vakit bilgisi alınamadı';
       isLoading = false;
     });
-    _hesaplaKalanSure();
   }
 
   void _hesaplaKalanSure() {
@@ -1826,9 +3380,9 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
       }
     });
 
-    List<MapEntry<String, DateTime>> siraliVakitler =
-        vakitDateTimes.entries.toList()
-          ..sort((a, b) => a.value.compareTo(b.value));
+    List<MapEntry<String, DateTime>> siraliVakitler = vakitDateTimes.entries
+        .toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
 
     for (int i = 0; i < siraliVakitler.length; i++) {
       if (siraliVakitler[i].value.isAfter(simdi)) {
@@ -1861,8 +3415,14 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
             "${kalanSureDuration.inHours.toString().padLeft(2, '0')}:${(kalanSureDuration.inMinutes % 60).toString().padLeft(2, '0')}:${(kalanSureDuration.inSeconds % 60).toString().padLeft(2, '0')}";
       });
 
-      if (_bildirimCubugu) {
-        updateVakitBilgiCubugu(bugununVakitleri);
+      if (_lastWidgetSync == null ||
+          simdi.difference(_lastWidgetSync!) >= const Duration(minutes: 1)) {
+        _lastWidgetSync = simdi;
+        unawaited(HomeWidgetService.update(
+          location: '$secilenSehir ($secilenIlce)',
+          nextPrayer: siradakiVakit,
+          countdown: kalanSure,
+        ));
       }
     }
   }
@@ -1899,7 +3459,8 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
       _bildirimDuaHadisEkle = prefs.getBool('bildirim_dua_hadis_ekle') ?? true;
       secilenSehir = prefs.getString('secilen_sehir') ?? "İstanbul";
       secilenIlce = prefs.getString('secilen_ilce') ?? "Kadıköy";
-      kayitliSehirler = prefs.getStringList('kayitli_sehirler') ?? ["İstanbul (Kadıköy)", "Malatya (Yeşilyurt)", "Ankara (Çankaya)"];
+      kayitliSehirler = prefs.getStringList('kayitli_sehirler') ??
+          ["İstanbul (Kadıköy)", "Malatya (Yeşilyurt)", "Ankara (Çankaya)"];
     });
   }
 
@@ -1924,14 +3485,18 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
               backgroundColor: isDark ? theme.cardDark : theme.cardLight,
               title: Text(
                 "81 İl & İlçe Yönetimi 📍",
-                style: TextStyle(color: isDark ? theme.textDark : theme.primary),
+                style:
+                    TextStyle(color: isDark ? theme.textDark : theme.primary),
               ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("İl Seçin (81 İl):", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? theme.textDark : theme.primary)),
+                    Text("İl Seçin (81 İl):",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? theme.textDark : theme.primary)),
                     const SizedBox(height: 6),
                     DropdownButton<String>(
                       isExpanded: true,
@@ -1940,7 +3505,10 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                       items: TurkiyeSehirler.iller.map((il) {
                         return DropdownMenuItem(
                           value: il,
-                          child: Text(il, style: TextStyle(color: isDark ? theme.textDark : theme.primary)),
+                          child: Text(il,
+                              style: TextStyle(
+                                  color:
+                                      isDark ? theme.textDark : theme.primary)),
                         );
                       }).toList(),
                       onChanged: (val) {
@@ -1953,7 +3521,10 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                       },
                     ),
                     const SizedBox(height: 10),
-                    Text("İlçe Seçin:", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? theme.textDark : theme.primary)),
+                    Text("İlçe Seçin:",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? theme.textDark : theme.primary)),
                     const SizedBox(height: 6),
                     DropdownButton<String>(
                       isExpanded: true,
@@ -1962,7 +3533,10 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                       items: ilceler.map((ilce) {
                         return DropdownMenuItem(
                           value: ilce,
-                          child: Text(ilce, style: TextStyle(color: isDark ? theme.textDark : theme.primary)),
+                          child: Text(ilce,
+                              style: TextStyle(
+                                  color:
+                                      isDark ? theme.textDark : theme.primary)),
                         );
                       }).toList(),
                       onChanged: (val) {
@@ -1996,7 +3570,10 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                       },
                     ),
                     const Divider(height: 24),
-                    Text("Kayıtlı Konumlarınız:", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? theme.textDark : theme.primary)),
+                    Text("Kayıtlı Konumlarınız:",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? theme.textDark : theme.primary)),
                     ...kayitliSehirler.map((item) {
                       bool isCurrent = item.contains(secilenSehir);
                       return ListTile(
@@ -2005,14 +3582,18 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                         title: Text(
                           item,
                           style: TextStyle(
-                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                            fontWeight:
+                                isCurrent ? FontWeight.bold : FontWeight.normal,
                             color: isDark ? theme.textDark : theme.primary,
                           ),
                         ),
-                        leading: Icon(isCurrent ? Icons.push_pin : Icons.location_city, color: theme.primary),
+                        leading: Icon(
+                            isCurrent ? Icons.push_pin : Icons.location_city,
+                            color: theme.primary),
                         trailing: kayitliSehirler.length > 1
                             ? IconButton(
-                                icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                                icon: const Icon(Icons.delete,
+                                    size: 20, color: Colors.red),
                                 onPressed: () {
                                   setDiyalogState(() {
                                     kayitliSehirler.remove(item);
@@ -2022,7 +3603,8 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                               )
                             : null,
                         onTap: () {
-                          List<String> parts = item.replaceAll(")", "").split(" (");
+                          List<String> parts =
+                              item.replaceAll(")", "").split(" (");
                           if (parts.length == 2) {
                             setState(() {
                               secilenSehir = parts[0];
@@ -2052,30 +3634,37 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
   }
 
   void _ayarlarMenusunuAc() {
+    final scope = AppThemeScope.of(context);
+    final isDark = scope.isDark;
+    final activeTheme = scope.themeData;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: widget.isDarkMode ? AppThemeData.getTheme(widget.currentTheme).backgroundDark : AppThemeData.getTheme(widget.currentTheme).backgroundLight,
+      backgroundColor:
+          isDark ? activeTheme.backgroundDark : activeTheme.backgroundLight,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final activeTheme = AppThemeData.getTheme(widget.currentTheme);
+            final currentScope = AppThemeScope.of(context);
+            final activeTheme = currentScope.themeData;
             final theme = activeTheme;
-            final isDark = widget.isDarkMode;
+            final isDark = currentScope.isDark;
+            final currentMode = currentScope.themeMode;
 
             return DraggableScrollableSheet(
-              initialChildSize: 0.85,
-              minChildSize: 0.5,
+              initialChildSize: 0.76,
+              minChildSize: 0.42,
               maxChildSize: 0.95,
               expand: false,
               builder: (context, scrollController) {
                 return SingleChildScrollView(
                   controller: scrollController,
                   child: Padding(
-                    padding: const EdgeInsets.all(22),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -2085,26 +3674,30 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                             Text(
                               "🌸 Ayarlar",
                               style: TextStyle(
-                                fontSize: 22,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: isDark ? activeTheme.textDark : activeTheme.primary,
+                                color: isDark
+                                    ? activeTheme.textDark
+                                    : activeTheme.primary,
                               ),
                             ),
                             IconButton(
-                              icon: Icon(Icons.close, color: activeTheme.primary),
+                              icon:
+                                  Icon(Icons.close, color: activeTheme.primary),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
                         ),
                         const Divider(),
                         const SizedBox(height: 10),
-
                         Text(
                           "Temalar 🎨",
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
-                            color: isDark ? activeTheme.textDark : activeTheme.primary,
+                            color: isDark
+                                ? activeTheme.textDark
+                                : activeTheme.primary,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -2113,19 +3706,27 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                           child: Row(
                             children: AppThemeMode.values.map((tMode) {
                               final tData = AppThemeData.getTheme(tMode);
-                              final isSelected = widget.currentTheme == tMode;
+                              final isSelected = currentMode == tMode;
 
                               return Padding(
                                 padding: const EdgeInsets.only(right: 8.0),
                                 child: ChoiceChip(
                                   label: Text(tData.name),
                                   selected: isSelected,
-                                  selectedColor: tData.primary.withValues(alpha: 0.4),
+                                  selectedColor:
+                                      tData.primary.withValues(alpha: 0.4),
                                   onSelected: (val) {
                                     if (val) {
-                                      widget.onThemeChanged(tMode, widget.isDarkMode);
+                                      currentScope.onThemeChanged(
+                                          tMode, isDark);
                                       setState(() {});
                                       setModalState(() {});
+                                      Navigator.pop(context);
+                                      Future.delayed(
+                                          const Duration(milliseconds: 100),
+                                          () {
+                                        _ayarlarMenusunuAc();
+                                      });
                                     }
                                   },
                                 ),
@@ -2134,18 +3735,100 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        Text(
+                          "🖼️ Arka Plan Desenleri / Görseller 🌼",
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? activeTheme.textDark
+                                : activeTheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ChoiceChip(
+                                label: const Text("Düz Renk 🎨"),
+                                selected: _secilenDuvarKagidi == "yok",
+                                selectedColor:
+                                    activeTheme.primary.withValues(alpha: 0.4),
+                                onSelected: (val) {
+                                  if (val) {
+                                    setState(() => _secilenDuvarKagidi = "yok");
+                                    setModalState(() {});
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              ChoiceChip(
+                                label: const Text("Papatya Bahçesi 🌼"),
+                                selected: _secilenDuvarKagidi == "papatya",
+                                selectedColor:
+                                    activeTheme.primary.withValues(alpha: 0.4),
+                                onSelected: (val) {
+                                  if (val) {
+                                    setState(
+                                        () => _secilenDuvarKagidi = "papatya");
+                                    setModalState(() {});
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              ChoiceChip(
+                                label: const Text("Ebru Sanatı 🎨"),
+                                selected: _secilenDuvarKagidi == "ebru",
+                                selectedColor:
+                                    activeTheme.primary.withValues(alpha: 0.4),
+                                onSelected: (val) {
+                                  if (val) {
+                                    setState(
+                                        () => _secilenDuvarKagidi = "ebru");
+                                    setModalState(() {});
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              ChoiceChip(
+                                label: const Text("Cami & Hilal 🌙"),
+                                selected: _secilenDuvarKagidi == "cami",
+                                selectedColor:
+                                    activeTheme.primary.withValues(alpha: 0.4),
+                                onSelected: (val) {
+                                  if (val) {
+                                    setState(
+                                        () => _secilenDuvarKagidi = "cami");
+                                    setModalState(() {});
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         SwitchListTile(
-                          title: Text("🌙 Gece Modu (Koyu Tema)", style: TextStyle(color: isDark ? activeTheme.textDark : activeTheme.primary)),
-                          subtitle: const Text("Tüm kutucukları ve arka planı karanlık renklere bürür"),
-                          value: widget.isDarkMode,
+                          title: Text("🌙 Gece Modu (Koyu Tema)",
+                              style: TextStyle(
+                                  color: isDark
+                                      ? activeTheme.textDark
+                                      : activeTheme.primary)),
+                          subtitle: const Text(
+                              "Tüm kutucukları ve arka planı karanlık renklere bürür"),
+                          value: isDark,
                           onChanged: (val) {
-                            widget.onThemeChanged(widget.currentTheme, val);
+                            currentScope.onThemeChanged(currentMode, val);
                             setState(() {});
                             setModalState(() {});
+                            Navigator.pop(context);
+                            Future.delayed(const Duration(milliseconds: 100),
+                                () {
+                              _ayarlarMenusunuAc();
+                            });
                           },
                         ),
                         const Divider(),
-
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -2154,7 +3837,9 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: isDark ? activeTheme.textDark : activeTheme.primary,
+                                color: isDark
+                                    ? activeTheme.textDark
+                                    : activeTheme.primary,
                               ),
                             ),
                             Text(
@@ -2162,7 +3847,9 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: isDark ? activeTheme.textDark : activeTheme.primary,
+                                color: isDark
+                                    ? activeTheme.textDark
+                                    : activeTheme.primary,
                               ),
                             ),
                           ],
@@ -2180,10 +3867,63 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                           },
                         ),
                         const Divider(),
-
-                        SwitchListTile(
-                          title: Text("Sabit Vakit Bilgi Çubuğu", style: TextStyle(color: widget.isDarkMode ? theme.textDark : theme.primary)),
-                          subtitle: const Text("Namaz vakitleri çubukta gösterilsin"),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text("Vakit öncesi hatırlatma",
+                              style: TextStyle(
+                                  color:
+                                      isDark ? theme.textDark : theme.primary)),
+                          subtitle:
+                              const Text("Uygulama kapalıyken de bildirim al"),
+                          value: _vakitOncesiUyari,
+                          onChanged: (val) async {
+                            setModalState(() => _vakitOncesiUyari = val);
+                            setState(() => _vakitOncesiUyari = val);
+                            await _kaydetTumAyarlar();
+                            await _prayerNotificationService.scheduleToday(
+                              timings: bugununVakitleri,
+                              enabled: val,
+                              minutesBefore: _kacDakikaOnceSlider.round(),
+                            );
+                          },
+                        ),
+                        if (_vakitOncesiUyari) ...[
+                          Text(
+                              "Hatırlatma: ${_kacDakikaOnceSlider.round()} dakika önce",
+                              style: TextStyle(
+                                  color:
+                                      isDark ? theme.textDark : theme.primary)),
+                          Slider(
+                            value: _kacDakikaOnceSlider,
+                            min: 5,
+                            max: 60,
+                            divisions: 11,
+                            label: '${_kacDakikaOnceSlider.round()} dk',
+                            activeColor: theme.primary,
+                            onChanged: (val) {
+                              setModalState(() => _kacDakikaOnceSlider = val);
+                              setState(() => _kacDakikaOnceSlider = val);
+                            },
+                            onChangeEnd: (val) async {
+                              await _kaydetTumAyarlar();
+                              await _prayerNotificationService.scheduleToday(
+                                timings: bugununVakitleri,
+                                enabled: true,
+                                minutesBefore: val.round(),
+                              );
+                            },
+                          ),
+                        ],
+                        const Divider(),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text("Sabit Vakit Bilgi Çubuğu",
+                              style: TextStyle(
+                                  color: widget.isDarkMode
+                                      ? theme.textDark
+                                      : theme.primary)),
+                          subtitle:
+                              const Text("Namaz vakitleri çubukta gösterilsin"),
                           value: _bildirimCubugu,
                           onChanged: (val) async {
                             setModalState(() => _bildirimCubugu = val);
@@ -2196,8 +3936,13 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                             }
                           },
                         ),
-                        SwitchListTile(
-                          title: Text("Bildirimlerde Dua / Hadis Göster", style: TextStyle(color: widget.isDarkMode ? theme.textDark : theme.primary)),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text("Bildirimlerde Dua / Hadis Göster",
+                              style: TextStyle(
+                                  color: widget.isDarkMode
+                                      ? theme.textDark
+                                      : theme.primary)),
                           value: _bildirimDuaHadisEkle,
                           onChanged: (val) {
                             setModalState(() => _bildirimDuaHadisEkle = val);
@@ -2206,11 +3951,15 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                           },
                         ),
                         const Divider(),
-
                         ListTile(
-                          title: Text("📍 Konum ve 81 İl/İlçe Yönetimi", style: TextStyle(color: widget.isDarkMode ? theme.textDark : theme.primary)),
+                          title: Text("📍 Konum ve 81 İl/İlçe Yönetimi",
+                              style: TextStyle(
+                                  color: widget.isDarkMode
+                                      ? theme.textDark
+                                      : theme.primary)),
                           subtitle: Text("$secilenSehir ($secilenIlce)"),
-                          trailing: Icon(Icons.edit_location_alt, color: theme.primary),
+                          trailing: Icon(Icons.edit_location_alt,
+                              color: theme.primary),
                           onTap: () {
                             Navigator.pop(context);
                             _sehirVeIlceSecimiDiyalog();
@@ -2231,8 +3980,16 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = AppThemeData.getTheme(widget.currentTheme);
-    final isDark = widget.isDarkMode;
+    final scope = AppThemeScope.of(context);
+    final theme = scope.themeData;
+    final isDark = scope.isDark;
+
+    String? assetImage;
+    if (_secilenDuvarKagidi == "papatya")
+      assetImage = "assets/images/bg_papatya.jpg";
+    if (_secilenDuvarKagidi == "ebru") assetImage = "assets/images/bg_ebru.jpg";
+    if (_secilenDuvarKagidi == "cami")
+      assetImage = "assets/images/bg_mosque.jpg";
 
     return Scaffold(
       body: Container(
@@ -2242,18 +3999,30 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
             end: Alignment.bottomCenter,
             colors: isDark ? theme.bgGradientDark : theme.bgGradientLight,
           ),
+          image: assetImage != null
+              ? DecorationImage(
+                  image: AssetImage(assetImage),
+                  fit: BoxFit.cover,
+                  opacity: isDark ? 0.22 : 0.35,
+                )
+              : null,
         ),
         child: SafeArea(
           child: Column(
             children: [
               // HEADER BAR
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isDark ? theme.cardDark.withValues(alpha: 0.9) : theme.cardLight.withValues(alpha: 0.9),
+                  color: isDark
+                      ? theme.cardDark.withValues(alpha: 0.9)
+                      : theme.cardLight.withValues(alpha: 0.9),
                   border: Border(
                     bottom: BorderSide(
-                      color: isDark ? Colors.white12 : theme.primary.withValues(alpha: 0.2),
+                      color: isDark
+                          ? Colors.white12
+                          : theme.primary.withValues(alpha: 0.2),
                     ),
                   ),
                 ),
@@ -2267,7 +4036,8 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                         },
                         child: Row(
                           children: [
-                            Icon(Icons.location_on, color: theme.primary, size: 20),
+                            Icon(Icons.location_on,
+                                color: theme.primary, size: 20),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
@@ -2275,14 +4045,16 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: isDark ? theme.textDark : theme.textLight,
+                                  color:
+                                      isDark ? theme.textDark : theme.textLight,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              DateFormat('d MMMM yyyy', 'tr_TR').format(DateTime.now()),
+                              DateFormat('d MMMM yyyy', 'tr_TR')
+                                  .format(DateTime.now()),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: isDark ? Colors.white60 : Colors.black54,
@@ -2305,13 +4077,15 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
 
               Expanded(
                 child: isLoading
-                    ? Center(child: CircularProgressIndicator(color: theme.primary))
+                    ? Center(
+                        child: CircularProgressIndicator(color: theme.primary))
                     : IndexedStack(
                         index: _aktifSayfaIndex,
                         children: [
                           AnaDashboardSayfasi(
                             kalanSure: kalanSure,
                             siradakiVakit: siradakiVakit,
+                            vakitKaynagi: _vakitKaynagi,
                             ilerlemeOrani: ilerlemeOrani,
                             isDark: isDark,
                             themeData: theme,
@@ -2329,15 +4103,17 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                         ],
                       ),
               ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: isDark ? Colors.black45 : theme.primary.withValues(alpha: 0.12),
+              color: isDark
+                  ? Colors.black45
+                  : theme.primary.withValues(alpha: 0.12),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -2384,6 +4160,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
 // ==================== ANA DASHBOARD (2x2 KARE KUTU DÜZENİ + ARAPÇA/TÜRKÇE/ANLAM DUA KARTI) ====================
 class AnaDashboardSayfasi extends StatefulWidget {
   final String kalanSure, siradakiVakit;
+  final String vakitKaynagi;
   final double ilerlemeOrani;
   final bool isDark;
   final AppThemeData themeData;
@@ -2393,6 +4170,7 @@ class AnaDashboardSayfasi extends StatefulWidget {
     super.key,
     required this.kalanSure,
     required this.siradakiVakit,
+    required this.vakitKaynagi,
     required this.ilerlemeOrani,
     required this.isDark,
     required this.themeData,
@@ -2408,7 +4186,8 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
     "ayet": "Yükleniyor...",
     "hadis": "Yükleniyor...",
     "dua": {
-      "arapca": "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ",
+      "arapca":
+          "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ",
       "okunusu": "Rabbena atina fid-dunya haseneten...",
       "anlamı": "Rabbimiz! Bize dünyada da iyilik ver, ahirette de iyilik ver."
     },
@@ -2432,8 +4211,10 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
 
   void _paylasIcerik(String baslik, String icerik) {
     HapticFeedback.lightImpact();
-    const playStoreUrl = "https://play.google.com/store/apps/details?id=com.aysenuryesilova.ezanvakti";
-    final mesaj = "🌸 Ezan Vakti - $baslik 🌸\n\n$icerik\n\n📲 Ezan Vakti uygulamasını Google Play Store'dan indirin:\n$playStoreUrl";
+    const playStoreUrl =
+        "https://play.google.com/store/apps/details?id=com.aysenuryesilova.ezanvakti";
+    final mesaj =
+        "🌸 Ezan Vakti - $baslik 🌸\n\n$icerik\n\n📲 Ezan Vakti uygulamasını Google Play Store'dan indirin:\n$playStoreUrl";
     Share.share(mesaj);
   }
 
@@ -2497,6 +4278,14 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                             color: theme.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.vakitKaynagi,
+                          style: TextStyle(
+                            color: isDark ? Colors.white60 : Colors.black54,
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -2621,7 +4410,8 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
     bool isDark,
     AppThemeData theme,
   ) {
-    final paylasMetin = "${duaMap['arapca']}\n${duaMap['okunusu']}\n${duaMap['anlamı']}";
+    final paylasMetin =
+        "${duaMap['arapca']}\n${duaMap['okunusu']}\n${duaMap['anlamı']}";
 
     return IosGlassCard(
       isDark: isDark,
