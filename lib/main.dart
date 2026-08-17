@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
@@ -2641,13 +2640,11 @@ class _KuranWebViewState extends State<KuranWebView> {
 }
 
 class KibleWebView extends StatefulWidget {
-  final String secilenSehir;
   final bool isDark;
   final AppThemeData themeData;
 
   const KibleWebView({
     super.key,
-    required this.secilenSehir,
     required this.isDark,
     required this.themeData,
   });
@@ -2659,7 +2656,6 @@ class KibleWebView extends StatefulWidget {
 class _KibleWebViewState extends State<KibleWebView> {
   WebViewController? _controller;
   bool _isLoading = true;
-  int _seciliMod = 0; // 0: Yerel İbreli Pusula, 1: Google Uydu Haritası
 
   @override
   void initState() {
@@ -2685,212 +2681,19 @@ class _KibleWebViewState extends State<KibleWebView> {
     }
   }
 
-  double _hesaplaKibleAcisi(double lat, double lng) {
-    const double kaabaLat = 21.422487;
-    const double kaabaLng = 39.826206;
-    final double phi1 = lat * math.pi / 180.0;
-    const double phi2 = kaabaLat * math.pi / 180.0;
-    final double deltaLambda = (kaabaLng - lng) * math.pi / 180.0;
-
-    final double y = math.sin(deltaLambda);
-    final double x = math.cos(phi1) * math.tan(phi2) -
-        math.sin(phi1) * math.cos(deltaLambda);
-    final double qiblaRad = math.atan2(y, x);
-    double qiblaDeg = qiblaRad * 180.0 / math.pi;
-    return (qiblaDeg + 360.0) % 360.0;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = widget.themeData;
-    final isDark = widget.isDark;
 
-    final coords = TurkeyCityCoordinates.forCity(widget.secilenSehir);
-    final double lat = coords?.latitude ?? 41.0082;
-    final double lng = coords?.longitude ?? 28.9784;
-    final kibleDegree = _hesaplaKibleAcisi(lat, lng);
+    if (kIsWeb || _controller == null) {
+      return const Center(child: Text("Kıble Bulucu ekranı"));
+    }
 
-    return Column(
+    return Stack(
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          color: isDark ? theme.cardDark : theme.cardLight,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ChoiceChip(
-                label: const Text("🕋 İbreli Kıble Pusulası"),
-                selected: _seciliMod == 0,
-                selectedColor: theme.primary.withValues(alpha: 0.4),
-                onSelected: (val) {
-                  if (val) setState(() => _seciliMod = 0);
-                },
-              ),
-              const SizedBox(width: 12),
-              ChoiceChip(
-                label: const Text("🗺️ Google Uydu Haritası"),
-                selected: _seciliMod == 1,
-                selectedColor: theme.primary.withValues(alpha: 0.4),
-                onSelected: (val) {
-                  if (val) setState(() => _seciliMod = 1);
-                },
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _seciliMod == 0
-              ? SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 10),
-                        IosGlassCard(
-                          isDark: isDark,
-                          themeData: theme,
-                          child: Column(
-                            children: [
-                              Text(
-                                "📍 ${widget.secilenSehir} Kıble Yönü",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? theme.textDark : theme.primary,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                "Açı: ${kibleDegree.toStringAsFixed(1)}° Güneydoğu",
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white70 : Colors.black87,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 30),
-                        // PUSULA HALKASI VE KÂBE İBRESİ
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Container(
-                              width: 250,
-                              height: 250,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isDark
-                                    ? Colors.black38
-                                    : Colors.white.withValues(alpha: 0.7),
-                                border: Border.all(
-                                  color: theme.primary.withValues(alpha: 0.6),
-                                  width: 4,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: theme.primary.withValues(alpha: 0.3),
-                                    blurRadius: 20,
-                                    spreadRadius: 3,
-                                  ),
-                                ],
-                              ),
-                              child: Stack(
-                                children: const [
-                                  Align(
-                                    alignment: Alignment.topCenter,
-                                    child: Padding(
-                                      padding: EdgeInsets.only(top: 10),
-                                      child: Text("K",
-                                          style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.red)),
-                                    ),
-                                  ),
-                                  Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: Padding(
-                                      padding: EdgeInsets.only(bottom: 10),
-                                      child: Text("G",
-                                          style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold)),
-                                    ),
-                                  ),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Padding(
-                                      padding: EdgeInsets.only(right: 12),
-                                      child: Text("D",
-                                          style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold)),
-                                    ),
-                                  ),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Padding(
-                                      padding: EdgeInsets.only(left: 12),
-                                      child: Text("B",
-                                          style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // DÖNEN KIBLE İBRESİ
-                            Transform.rotate(
-                              angle: kibleDegree * (math.pi / 180.0),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text("🕋", style: TextStyle(fontSize: 32)),
-                                  Icon(Icons.navigation,
-                                      size: 70, color: theme.primary),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 30),
-                        IosGlassCard(
-                          isDark: isDark,
-                          themeData: theme,
-                          child: Row(
-                            children: [
-                              Icon(Icons.info_outline, color: theme.primary),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  "Telefonunuzu düz bir zemine koyup pusula okunu Kâbe ikonuyla (🕋) hizalayın.",
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: isDark ? Colors.white70 : Colors.black87,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : Stack(
-                  children: [
-                    if (!kIsWeb && _controller != null)
-                      WebViewWidget(controller: _controller!),
-                    if (_isLoading)
-                      Center(
-                          child: CircularProgressIndicator(color: theme.primary)),
-                  ],
-                ),
-        ),
+        WebViewWidget(controller: _controller!),
+        if (_isLoading)
+          Center(child: CircularProgressIndicator(color: theme.primary)),
       ],
     );
   }
@@ -4303,10 +4106,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                             themeData: theme,
                           ),
                           KuranWebView(isDark: isDark),
-                          KibleWebView(
-                              secilenSehir: secilenSehir,
-                              isDark: isDark,
-                              themeData: theme),
+                          KibleWebView(isDark: isDark, themeData: theme),
                           ZikirmatikPage(isDark: isDark, themeData: theme),
                         ],
                       ),
