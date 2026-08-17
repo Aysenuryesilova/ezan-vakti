@@ -3839,6 +3839,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                             if (val) {
                               await Permission.notification.request();
                               await Permission.scheduleExactAlarm.request();
+                              await Permission.ignoreBatteryOptimizations.request();
                             }
                             setModalState(() => _vakitOncesiUyari = val);
                             setState(() => _vakitOncesiUyari = val);
