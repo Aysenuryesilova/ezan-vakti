@@ -12,7 +12,7 @@ class PrayerNotificationService {
     required bool enabled,
     required int minutesBefore,
   }) async {
-    for (var id = 1000; id < 1050; id++) {
+    for (var id = 1000; id < 1060; id++) {
       await _plugin.cancel(id);
     }
     if (!enabled) return;
@@ -23,29 +23,32 @@ class PrayerNotificationService {
       var time = _parseToday(timings[name], now);
       if (time == null) continue;
 
-      if (time.isBefore(now)) {
-        time = time.add(const Duration(days: 1));
+      var prayerTime = time;
+      if (prayerTime.isBefore(now)) {
+        prayerTime = prayerTime.add(const Duration(days: 1));
       }
 
-      // 1. Ezan Vakti Bildirimi
+      // 1. Ezan Vakti Bildirimi (Her gün tekrarlayan)
       await _schedule(
         id: 1000 + index,
-        at: time,
+        at: prayerTime,
         title: '🕌 $name Vakti Girdi',
         body: '$name ezan vakti geldi. Haydin namaza!',
       );
 
       // 2. Vakit Öncesi Uyarı Bildirimi (Kilit Ekranı & Tam Ekran)
-      var reminder = time.subtract(Duration(minutes: minutesBefore));
-      if (reminder.isBefore(now)) {
-        reminder = reminder.add(const Duration(days: 1));
+      if (minutesBefore > 0) {
+        var reminderTime = time.subtract(Duration(minutes: minutesBefore));
+        if (reminderTime.isBefore(now)) {
+          reminderTime = reminderTime.add(const Duration(days: 1));
+        }
+        await _schedule(
+          id: 1020 + index,
+          at: reminderTime,
+          title: '🔔 $name Vaktine $minutesBefore Dakika Kaldı',
+          body: 'Ezan okunmasına $minutesBefore dakika kaldı. Abdestinizi alıp hazırlanabilirsiniz.',
+        );
       }
-      await _schedule(
-        id: 1020 + index,
-        at: reminder,
-        title: '🔔 $name Vaktine $minutesBefore Dakika Kaldı',
-        body: 'Ezan okunmasına $minutesBefore dakika kaldı. Abdestinizi alıp hazırlanabilirsiniz.',
-      );
     }
   }
 
@@ -63,36 +66,54 @@ class PrayerNotificationService {
     required tz.TZDateTime at,
     required String title,
     required String body,
-  }) {
-    return _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      at,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'namaz_vakitleri_max_v2',
-          'Namaz Vakitleri & Hatırlatmalar',
-          channelDescription: 'Tam ekran ve kilit ekranı ezan/vakit öncesi hatırlatıcı bildirimleri',
-          importance: Importance.max,
-          priority: Priority.max,
-          visibility: NotificationVisibility.public,
-          fullScreenIntent: true,
-          category: AndroidNotificationCategory.alarm,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
-          enableVibration: true,
-          playSound: true,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-          interruptionLevel: InterruptionLevel.timeSensitive,
-        ),
+  }) async {
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'namaz_vakitleri_max_v2',
+        'Namaz Vakitleri & Hatırlatmalar',
+        channelDescription: 'Tam ekran ve kilit ekranı ezan/vakit öncesi hatırlatıcı bildirimleri',
+        importance: Importance.max,
+        priority: Priority.max,
+        visibility: NotificationVisibility.public,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        enableVibration: true,
+        playSound: true,
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
     );
+
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        at,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } catch (e) {
+      // Hassas alarm izni verilmemişse inexact fallback ile zamanla
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        at,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    }
   }
 }
