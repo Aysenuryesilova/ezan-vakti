@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
@@ -2630,11 +2631,13 @@ class _KuranWebViewState extends State<KuranWebView> {
 }
 
 class KibleWebView extends StatefulWidget {
+  final String secilenSehir;
   final bool isDark;
   final AppThemeData themeData;
 
   const KibleWebView({
     super.key,
+    required this.secilenSehir,
     required this.isDark,
     required this.themeData,
   });
@@ -2646,18 +2649,12 @@ class KibleWebView extends StatefulWidget {
 class _KibleWebViewState extends State<KibleWebView> {
   WebViewController? _controller;
   bool _isLoading = true;
-  String _seciliKibleProvider = 'https://qiblafinder.withgoogle.com/';
-
-  final Map<String, String> _kibleProviderlar = {
-    "Google Qibla Finder": "https://qiblafinder.withgoogle.com/",
-    "Al-Adhan Qibla Compass": "https://qibla.aladhan.com/",
-    "Diyanet Kıble Bulucu": "https://kible.diyanet.gov.tr/",
-  };
+  int _seciliMod = 0; // 0: Yerel İbreli Pusula, 1: Google Uydu Haritası
 
   @override
   void initState() {
     super.initState();
-    _initWebview(_seciliKibleProvider);
+    _initWebview('https://qiblafinder.withgoogle.com/');
   }
 
   void _initWebview(String url) {
@@ -2678,63 +2675,211 @@ class _KibleWebViewState extends State<KibleWebView> {
     }
   }
 
+  double _hesaplaKibleAcisi(double lat, double lng) {
+    const double kaabaLat = 21.422487;
+    const double kaabaLng = 39.826206;
+    final double phi1 = lat * math.pi / 180.0;
+    const double phi2 = kaabaLat * math.pi / 180.0;
+    final double deltaLambda = (kaabaLng - lng) * math.pi / 180.0;
+
+    final double y = math.sin(deltaLambda);
+    final double x = math.cos(phi1) * math.tan(phi2) -
+        math.sin(phi1) * math.cos(deltaLambda);
+    final double qiblaRad = math.atan2(y, x);
+    double qiblaDeg = qiblaRad * 180.0 / math.pi;
+    return (qiblaDeg + 360.0) % 360.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = widget.themeData;
     final isDark = widget.isDark;
 
-    if (kIsWeb || _controller == null) {
-      return const Center(child: Text("Kıble Bulucu ekranı"));
-    }
+    final coords = TurkeyCityCoordinates.forCity(widget.secilenSehir);
+    final double lat = coords?.latitude ?? 41.0082;
+    final double lng = coords?.longitude ?? 28.9784;
+    final kibleDegree = _hesaplaKibleAcisi(lat, lng);
 
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           color: isDark ? theme.cardDark : theme.cardLight,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                "Kıble Servisi:",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? theme.textDark : theme.primary,
-                ),
+              ChoiceChip(
+                label: const Text("🕋 İbreli Kıble Pusulası"),
+                selected: _seciliMod == 0,
+                selectedColor: theme.primary.withValues(alpha: 0.4),
+                onSelected: (val) {
+                  if (val) setState(() => _seciliMod = 0);
+                },
               ),
-              DropdownButton<String>(
-                value: _seciliKibleProvider,
-                dropdownColor: isDark ? theme.cardDark : theme.cardLight,
-                items: _kibleProviderlar.entries.map((e) {
-                  return DropdownMenuItem(
-                    value: e.value,
-                    child: Text(
-                      e.key,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? theme.textDark : theme.primary,
-                      ),
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => _seciliKibleProvider = val);
-                    _initWebview(val);
-                  }
+              const SizedBox(width: 12),
+              ChoiceChip(
+                label: const Text("🗺️ Google Uydu Haritası"),
+                selected: _seciliMod == 1,
+                selectedColor: theme.primary.withValues(alpha: 0.4),
+                onSelected: (val) {
+                  if (val) setState(() => _seciliMod = 1);
                 },
               ),
             ],
           ),
         ),
         Expanded(
-          child: Stack(
-            children: [
-              WebViewWidget(controller: _controller!),
-              if (_isLoading)
-                Center(child: CircularProgressIndicator(color: theme.primary)),
-            ],
-          ),
+          child: _seciliMod == 0
+              ? SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 10),
+                        IosGlassCard(
+                          isDark: isDark,
+                          themeData: theme,
+                          child: Column(
+                            children: [
+                              Text(
+                                "📍 ${widget.secilenSehir} Kıble Yönü",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? theme.textDark : theme.primary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Açı: ${kibleDegree.toStringAsFixed(1)}° Güneydoğu",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+                        // PUSULA HALKASI VE KÂBE İBRESİ
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 250,
+                              height: 250,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark
+                                    ? Colors.black38
+                                    : Colors.white.withValues(alpha: 0.7),
+                                border: Border.all(
+                                  color: theme.primary.withValues(alpha: 0.6),
+                                  width: 4,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: theme.primary.withValues(alpha: 0.3),
+                                    blurRadius: 20,
+                                    spreadRadius: 3,
+                                  ),
+                                ],
+                              ),
+                              child: Stack(
+                                children: const [
+                                  Align(
+                                    alignment: Alignment.topCenter,
+                                    child: Padding(
+                                      padding: EdgeInsets.only(top: 10),
+                                      child: Text("K",
+                                          style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.red)),
+                                    ),
+                                  ),
+                                  Align(
+                                    alignment: Alignment.bottomCenter,
+                                    child: Padding(
+                                      padding: EdgeInsets.only(bottom: 10),
+                                      child: Text("G",
+                                          style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Padding(
+                                      padding: EdgeInsets.only(right: 12),
+                                      child: Text("D",
+                                          style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Padding(
+                                      padding: EdgeInsets.only(left: 12),
+                                      child: Text("B",
+                                          style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // DÖNEN KIBLE İBRESİ
+                            Transform.rotate(
+                              angle: kibleDegree * (math.pi / 180.0),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text("🕋", style: TextStyle(fontSize: 32)),
+                                  Icon(Icons.navigation,
+                                      size: 70, color: theme.primary),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 30),
+                        IosGlassCard(
+                          isDark: isDark,
+                          themeData: theme,
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline, color: theme.primary),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  "Telefonunuzu düz bir zemine koyup pusula okunu Kâbe ikonuyla (🕋) hizalayın.",
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: isDark ? Colors.white70 : Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Stack(
+                  children: [
+                    if (!kIsWeb && _controller != null)
+                      WebViewWidget(controller: _controller!),
+                    if (_isLoading)
+                      Center(
+                          child: CircularProgressIndicator(color: theme.primary)),
+                  ],
+                ),
         ),
       ],
     );
@@ -3300,13 +3445,12 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
   };
 
   Timer? _timer;
-  bool _vakitOncesiUyari = true;
+  bool _vakitOncesiUyari = false;
   double _kacDakikaOnceSlider = 15.0;
-  bool _bildirimCubugu = true;
-  bool _bildirimDuaHadisEkle = true;
+  bool _bildirimCubugu = false;
+  bool _bildirimDuaHadisEkle = false;
   String _secilenDuvarKagidi = "papatya";
   String _vakitKaynagi = 'Güncelleniyor';
-  DateTime? _lastWidgetSync;
   final _prayerTimesService = PrayerTimesService();
   late final _prayerNotificationService =
       PrayerNotificationService(flutterLocalNotificationsPlugin);
@@ -3341,7 +3485,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
         _vakitKaynagi = switch (result.source) {
           PrayerTimesSource.alAdhan => 'AlAdhan · Diyanet metodu',
           PrayerTimesSource.cache => 'Bugünün kayıtlı verisi',
-          PrayerTimesSource.offlineCalculation => 'Çevrimdışı hesaplama',
+          PrayerTimesSource.offlineCalculation => 'Çevrimdışı Diyanet Vakti',
         };
         isLoading = false;
       });
@@ -3358,13 +3502,16 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
       _hesaplaKalanSure();
       return;
     } catch (e) {
-      debugPrint("Vakit verisi alınamadı: $e");
+      debugPrint("Vakit verisi alma hatası, çevrimdışı motor çalıştırılıyor: $e");
     }
     if (!mounted) return;
+    final offlineTimings = PrayerTimesService.calculateOffline(secilenSehir, DateTime.now());
     setState(() {
-      _vakitKaynagi = 'Vakit bilgisi alınamadı';
+      bugununVakitleri = offlineTimings;
+      _vakitKaynagi = 'Çevrimdışı Diyanet Vakti';
       isLoading = false;
     });
+    _hesaplaKalanSure();
   }
 
   void _hesaplaKalanSure() {
@@ -3415,15 +3562,14 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
             "${kalanSureDuration.inHours.toString().padLeft(2, '0')}:${(kalanSureDuration.inMinutes % 60).toString().padLeft(2, '0')}:${(kalanSureDuration.inSeconds % 60).toString().padLeft(2, '0')}";
       });
 
-      if (_lastWidgetSync == null ||
-          simdi.difference(_lastWidgetSync!) >= const Duration(minutes: 1)) {
-        _lastWidgetSync = simdi;
-        unawaited(HomeWidgetService.update(
-          location: '$secilenSehir ($secilenIlce)',
-          nextPrayer: siradakiVakit,
-          countdown: kalanSure,
-        ));
-      }
+      unawaited(HomeWidgetService.update(
+        location: '$secilenSehir ($secilenIlce)',
+        nextPrayer: 'Sıradaki Vakit: $siradakiVakit',
+        countdown: kalanSure,
+        dailyHadith:
+            "📖 Günün Hadisi: 'Kolaylaştırınız, zorlaştırmayınız; müjdeleyiniz, nefret ettirmeyiniz.' (Buhârî)",
+        targetTime: enYakinVakit,
+      ));
     }
   }
 
@@ -3843,7 +3989,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                               ),
                             ),
                             Text(
-                              "%${(widget.fontScale.clamp(0.80, 1.40) * 100).round()}",
+                              "%${(currentScope.fontScale.clamp(0.80, 1.40) * 100).round()}",
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -3855,15 +4001,15 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                           ],
                         ),
                         Slider(
-                          value: widget.fontScale.clamp(0.80, 1.40),
+                          value: currentScope.fontScale.clamp(0.80, 1.40),
                           min: 0.80,
                           max: 1.40,
                           divisions: 12,
                           activeColor: activeTheme.primary,
                           onChanged: (val) {
-                            widget.onFontScaleChanged(val);
-                            setState(() {});
+                            currentScope.onFontScaleChanged(val);
                             setModalState(() {});
+                            setState(() {});
                           },
                         ),
                         const Divider(),
@@ -3919,7 +4065,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                           contentPadding: EdgeInsets.zero,
                           title: Text("Sabit Vakit Bilgi Çubuğu",
                               style: TextStyle(
-                                  color: widget.isDarkMode
+                                  color: isDark
                                       ? theme.textDark
                                       : theme.primary)),
                           subtitle:
@@ -3936,18 +4082,59 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                             }
                           },
                         ),
-                        SwitchListTile.adaptive(
+                        const Divider(),
+                        ListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text("Bildirimlerde Dua / Hadis Göster",
-                              style: TextStyle(
-                                  color: widget.isDarkMode
-                                      ? theme.textDark
-                                      : theme.primary)),
-                          value: _bildirimDuaHadisEkle,
-                          onChanged: (val) {
-                            setModalState(() => _bildirimDuaHadisEkle = val);
-                            setState(() => _bildirimDuaHadisEkle = val);
-                            _kaydetTumAyarlar();
+                          leading: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: activeTheme.primary.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.widgets, color: activeTheme.primary, size: 22),
+                          ),
+                          title: Text(
+                            "📲 Masaüstü Widget'ı Ekleyin",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? activeTheme.textDark : activeTheme.primary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            "Ana ekrana canlı namaz saatleri ve Günün Hadisi çubuğunu yerleştirin",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDark ? Colors.white70 : Colors.black54,
+                            ),
+                          ),
+                          trailing: Icon(Icons.arrow_forward_ios, size: 16, color: activeTheme.primary),
+                          onTap: () {
+                            HomeWidgetService.update(
+                              location: "$secilenSehir ($secilenIlce)",
+                              nextPrayer: siradakiVakit,
+                              countdown: kalanSure,
+                            );
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                title: const Text("📲 Masaüstü Widget Rehberi"),
+                                content: const Text(
+                                  "1. Telefonunuzun ana ekranında boş bir alana basılı tutun.\n"
+                                  "2. Açılan menüden 'Widget'lar' seçeneğine tıklayın.\n"
+                                  "3. 'EZAN VAKTİ' uygulamasını bulun ve ekrana sürükleyin!\n\n"
+                                  "Widget canlı namaz vakitlerini ve Günün Hadisi'ni telefonunuzun ekranında gösterecektir.",
+                                ),
+                                actions: [
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: activeTheme.primary),
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text("Anladım", style: TextStyle(color: Colors.white)),
+                                  ),
+                                ],
+                              ),
+                            );
                           },
                         ),
                         const Divider(),
@@ -3985,11 +4172,15 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
     final isDark = scope.isDark;
 
     String? assetImage;
-    if (_secilenDuvarKagidi == "papatya")
+    if (_secilenDuvarKagidi == "papatya") {
       assetImage = "assets/images/bg_papatya.jpg";
-    if (_secilenDuvarKagidi == "ebru") assetImage = "assets/images/bg_ebru.jpg";
-    if (_secilenDuvarKagidi == "cami")
+    }
+    if (_secilenDuvarKagidi == "ebru") {
+      assetImage = "assets/images/bg_ebru.jpg";
+    }
+    if (_secilenDuvarKagidi == "cami") {
       assetImage = "assets/images/bg_mosque.jpg";
+    }
 
     return Scaffold(
       body: Container(
@@ -4098,7 +4289,10 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                             themeData: theme,
                           ),
                           KuranWebView(isDark: isDark),
-                          KibleWebView(isDark: isDark, themeData: theme),
+                          KibleWebView(
+                              secilenSehir: secilenSehir,
+                              isDark: isDark,
+                              themeData: theme),
                           ZikirmatikPage(isDark: isDark, themeData: theme),
                         ],
                       ),

@@ -25,14 +25,14 @@
         android:textSize="12sp"
         android:layout_marginTop="4dp"/>
 
-    <TextView
-        android:id="@+id/widget_countdown"
+    <Chronometer
+        android:id="@+id/widget_chronometer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="02:15:30"
         android:textColor="#FFFFFF"
-        android:textSize="22sp"
+        android:textSize="24sp"
         android:textStyle="bold"
+        android:countDown="true"
         android:layout_marginTop="2dp"/>
 
     <TextView
@@ -43,8 +43,7 @@
         android:textColor="#F7F4D5"
         android:textSize="11sp"
         android:textStyle="italic"
-        android:maxLines="2"
-        android:ellipsize="end"
+        android:maxLines="10"
         android:gravity="center"
         android:layout_marginTop="6dp"/>
 </LinearLayout>

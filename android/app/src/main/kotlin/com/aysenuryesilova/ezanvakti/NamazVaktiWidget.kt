@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.ComponentName
+import android.os.SystemClock
 import android.widget.RemoteViews
 
 class NamazVaktiWidget : AppWidgetProvider() {
@@ -27,13 +28,22 @@ class NamazVaktiWidget : AppWidgetProvider() {
 
         private fun createViews(context: Context): RemoteViews {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val location = prefs.getString("flutter.widget_location", "Konum seçin")
-            val nextPrayer = prefs.getString("flutter.widget_next_prayer", "Vakitler güncelleniyor")
-            val countdown = prefs.getString("flutter.widget_countdown", "--:--:--")
+            val location = prefs.getString("flutter.widget_location", "İstanbul (Kadıköy)")
+            val nextPrayer = prefs.getString("flutter.widget_next_prayer", "Sıradaki Vakte Kalan Süre")
+            val hadis = prefs.getString("flutter.widget_hadis", "📖 Günün Hadisi: 'Kolaylaştırınız, zorlaştırmayınız; müjdeleyiniz, nefret ettirmeyiniz.' (Buhârî)")
+            val targetMs = prefs.getLong("flutter.widget_target_ms", 0L)
+
             return RemoteViews(context.packageName, R.layout.namaz_vakti_widget).apply {
-                setTextViewText(R.id.widget_location, "🕌 $location")
-                setTextViewText(R.id.widget_next_vakit, "Sıradaki vakit: $nextPrayer")
-                setTextViewText(R.id.widget_countdown, countdown)
+                setTextViewText(R.id.widget_location, "🕌 Ezan Vakti - $location")
+                setTextViewText(R.id.widget_next_vakit, nextPrayer)
+                setTextViewText(R.id.widget_hadis, hadis)
+
+                if (targetMs > System.currentTimeMillis()) {
+                    val base = SystemClock.elapsedRealtime() + (targetMs - System.currentTimeMillis())
+                    setChronometer(R.id.widget_chronometer, base, null, true)
+                } else {
+                    setChronometer(R.id.widget_chronometer, SystemClock.elapsedRealtime(), null, true)
+                }
             }
         }
     }
