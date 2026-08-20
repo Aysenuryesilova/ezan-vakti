@@ -47,3 +47,5 @@ Bu dosya ve `.jks` anahtarı `.gitignore` kapsamındadır. Yayın anahtarını v
 - İnternet: vakit ve içerik kaynaklarına ulaşmak için
 
 Uygulama konumu istemez; kullanıcı il ve ilçesini kendisi seçer.
+
+Görüş ve önerileriniz için iletişime geçmekten çekinmeyin. 
