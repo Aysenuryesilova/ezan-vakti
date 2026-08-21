@@ -2686,7 +2686,6 @@ class _KibleWebViewState extends State<KibleWebView> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.themeData;
-    final isDark = widget.isDark;
 
     if (kIsWeb || _controller == null) {
       return const Center(child: Text("Kıble Bulucu ekranı"));
@@ -2697,71 +2696,6 @@ class _KibleWebViewState extends State<KibleWebView> {
         WebViewWidget(controller: _controller!),
         if (_isLoading)
           Center(child: CircularProgressIndicator(color: theme.primary)),
-
-        // ÜST REHBER BİLGİ KARTI (KUSURSUZ ÇATİ HİZALAMASI)
-        Positioned(
-          top: 10,
-          left: 12,
-          right: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.90),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.teal.shade700.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.verified_rounded, color: Colors.teal.shade700, size: 22),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "🕋 KUSURSUZ EV & ÇATI KIBLE HİZALAMASI",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? theme.textDark : theme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        "Kendi evinizin çatısına bakıp yeşil kıble çizgisini gözünüzle %100 doğrulayın.",
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                  color: theme.primary,
-                  onPressed: () {
-                    _controller?.reload();
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
