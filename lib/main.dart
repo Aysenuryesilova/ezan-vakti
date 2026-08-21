@@ -15,6 +15,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:share_plus/share_plus.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'core/home_widget_service.dart';
 import 'core/prayer_notification_service.dart';
 import 'core/prayer_times_service.dart';
@@ -3459,6 +3461,86 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
     });
   }
 
+  Future<void> _konumumuOtomatikBul(Function(void Function()) setDiyalogState) async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Konum izni reddedildi.')),
+            );
+          }
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Lütfen ayarlardan konum iznini etkinleştirin.')),
+          );
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+      );
+
+      final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+        String bulIl = place.administrativeArea ?? place.locality ?? '';
+        String bulIlce = place.subAdministrativeArea ?? place.subLocality ?? place.locality ?? '';
+
+        final tumIller = TurkiyeSehirler.iller;
+        String? eslesenIl;
+        for (final il in tumIller) {
+          if (il.toLowerCase().contains(bulIl.toLowerCase()) || bulIl.toLowerCase().contains(il.toLowerCase())) {
+            eslesenIl = il;
+            break;
+          }
+        }
+
+        if (eslesenIl != null) {
+          final ilceler = TurkiyeSehirler.getIlceler(eslesenIl);
+          String eslesenIlce = ilceler.isNotEmpty ? ilceler.first : eslesenIl;
+          for (final ilce in ilceler) {
+            if (ilce.toLowerCase().contains(bulIlce.toLowerCase()) || bulIlce.toLowerCase().contains(ilce.toLowerCase())) {
+              eslesenIlce = ilce;
+              break;
+            }
+          }
+
+          setState(() {
+            secilenSehir = eslesenIl!;
+            secilenIlce = eslesenIlce;
+            String entry = "$eslesenIl ($eslesenIlce)";
+            if (!kayitliSehirler.contains(entry)) {
+              kayitliSehirler.add(entry);
+            }
+          });
+          setDiyalogState(() {});
+          await _kaydetTumAyarlar();
+          await ezanVakitleriniGetir();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('📍 Konum bulundu: $eslesenIl / $eslesenIlce')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Konum bulma hatası: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Konum alınamadı: $e')),
+        );
+      }
+    }
+  }
+
   void _sehirVeIlceSecimiDiyalog() {
     String tempIl = secilenSehir;
     String tempIlce = secilenIlce;
@@ -3488,6 +3570,21 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal.shade700,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(42),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.my_location_rounded),
+                      label: const Text("📍 Otomatik Konumumu Bul (GPS)",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: () => _konumumuOtomatikBul(setDiyalogState),
+                    ),
+                    const SizedBox(height: 12),
                     Text("İl Seçin (81 İl):",
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
@@ -4387,14 +4484,6 @@ class _AnaDashboardSayfasiState extends State<AnaDashboardSayfasi> {
                             color: theme.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.vakitKaynagi,
-                          style: TextStyle(
-                            color: isDark ? Colors.white60 : Colors.black54,
-                            fontSize: 12,
                           ),
                         ),
                       ],

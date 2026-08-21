@@ -29,6 +29,31 @@ class PrayerTimesService {
 
   static const _cachePrefix = 'prayer_times_v2_';
 
+  Future<PrayerTimesResult?> getTodayByCoordinates({
+    required double latitude,
+    required double longitude,
+    DateTime? now,
+  }) async {
+    try {
+      final uri = Uri.https('api.aladhan.com', '/v1/timings', {
+        'latitude': latitude.toString(),
+        'longitude': longitude.toString(),
+        'method': '13',
+      });
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 8));
+      final timings = _parseAlAdhan(response);
+      if (timings != null) {
+        return PrayerTimesResult(
+          timings: timings,
+          source: PrayerTimesSource.alAdhan,
+          fetchedAt: DateTime.now(),
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<PrayerTimesResult> getToday({
     required String city,
     required String district,
