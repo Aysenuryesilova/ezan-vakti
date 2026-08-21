@@ -23,8 +23,8 @@ android {
         applicationId "com.aysenuryesilova.ezanvakti"
         minSdkVersion flutter.minSdkVersion
         targetSdk 36
-        versionCode 8
-        versionName "3.4.1"
+        versionCode 9
+        versionName "3.5.0"
     }
 
     def keystoreProperties = new Properties()

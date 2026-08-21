@@ -3260,6 +3260,22 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
   Timer? _timer;
   bool _vakitOncesiUyari = false;
   double _kacDakikaOnceSlider = 15.0;
+  final Map<String, bool> _vakitBildirimleriEnabled = {
+    'İmsak': true,
+    'Güneş': true,
+    'Öğle': true,
+    'İkindi': true,
+    'Akşam': true,
+    'Yatsı': true,
+  };
+  final Map<String, double> _vakitHatirlatmaDakikalari = {
+    'İmsak': 15.0,
+    'Güneş': 15.0,
+    'Öğle': 15.0,
+    'İkindi': 15.0,
+    'Akşam': 15.0,
+    'Yatsı': 15.0,
+  };
   bool _bildirimCubugu = false;
   bool _bildirimDuaHadisEkle = false;
   String _secilenDuvarKagidi = "papatya";
@@ -3267,6 +3283,20 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
   final _prayerTimesService = PrayerTimesService();
   late final _prayerNotificationService =
       PrayerNotificationService(flutterLocalNotificationsPlugin);
+
+  Future<void> _zamanlaTumBildirimleri() async {
+    final perPrayerMinutes = <String, int>{};
+    _vakitHatirlatmaDakikalari.forEach((key, val) {
+      perPrayerMinutes[key] = val.round();
+    });
+    await _prayerNotificationService.scheduleToday(
+      timings: bugununVakitleri,
+      enabled: _vakitOncesiUyari,
+      minutesBefore: _kacDakikaOnceSlider.round(),
+      perPrayerEnabled: _vakitBildirimleriEnabled,
+      perPrayerMinutesBefore: perPrayerMinutes,
+    );
+  }
 
   @override
   void initState() {
@@ -3303,11 +3333,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
         isLoading = false;
       });
       try {
-        await _prayerNotificationService.scheduleToday(
-          timings: result.timings,
-          enabled: _vakitOncesiUyari,
-          minutesBefore: _kacDakikaOnceSlider.round(),
-        );
+        await _zamanlaTumBildirimleri();
       } on Exception catch (error) {
         debugPrint('Bildirimler planlanamadı: $error');
       }
@@ -3407,6 +3433,11 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
     await prefs.setString('secilen_sehir', secilenSehir);
     await prefs.setString('secilen_ilce', secilenIlce);
     await prefs.setStringList('kayitli_sehirler', kayitliSehirler);
+
+    for (final v in ['İmsak', 'Güneş', 'Öğle', 'İkindi', 'Akşam', 'Yatsı']) {
+      await prefs.setBool('vakit_enabled_$v', _vakitBildirimleriEnabled[v] ?? true);
+      await prefs.setDouble('vakit_minutes_$v', _vakitHatirlatmaDakikalari[v] ?? 15.0);
+    }
   }
 
   Future<void> _yukleTumAyarlar() async {
@@ -3420,6 +3451,11 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
       secilenIlce = prefs.getString('secilen_ilce') ?? "Kadıköy";
       kayitliSehirler = prefs.getStringList('kayitli_sehirler') ??
           ["İstanbul (Kadıköy)", "Malatya (Yeşilyurt)", "Ankara (Çankaya)"];
+
+      for (final v in ['İmsak', 'Güneş', 'Öğle', 'İkindi', 'Akşam', 'Yatsı']) {
+        _vakitBildirimleriEnabled[v] = prefs.getBool('vakit_enabled_$v') ?? true;
+        _vakitHatirlatmaDakikalari[v] = prefs.getDouble('vakit_minutes_$v') ?? 15.0;
+      }
     });
   }
 
@@ -3844,39 +3880,103 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                             setModalState(() => _vakitOncesiUyari = val);
                             setState(() => _vakitOncesiUyari = val);
                             await _kaydetTumAyarlar();
-                            await _prayerNotificationService.scheduleToday(
-                              timings: bugununVakitleri,
-                              enabled: val,
-                              minutesBefore: _kacDakikaOnceSlider.round(),
-                            );
+                            await _zamanlaTumBildirimleri();
                           },
                         ),
                         if (_vakitOncesiUyari) ...[
+                          const SizedBox(height: 12),
                           Text(
-                              "Hatırlatma: ${_kacDakikaOnceSlider.round()} dakika önce",
-                              style: TextStyle(
-                                  color:
-                                      isDark ? theme.textDark : theme.primary)),
-                          Slider(
-                            value: _kacDakikaOnceSlider,
-                            min: 5,
-                            max: 60,
-                            divisions: 11,
-                            label: '${_kacDakikaOnceSlider.round()} dk',
-                            activeColor: theme.primary,
-                            onChanged: (val) {
-                              setModalState(() => _kacDakikaOnceSlider = val);
-                              setState(() => _kacDakikaOnceSlider = val);
-                            },
-                            onChangeEnd: (val) async {
-                              await _kaydetTumAyarlar();
-                              await _prayerNotificationService.scheduleToday(
-                                timings: bugununVakitleri,
-                                enabled: true,
-                                minutesBefore: val.round(),
-                              );
-                            },
+                            "🔔 VAKİT BAZLI ÖZEL BİLDİRİM VE SÜRE AYARLARI",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: theme.primary,
+                              letterSpacing: 0.5,
+                            ),
                           ),
+                          const SizedBox(height: 8),
+                          ...['İmsak', 'Güneş', 'Öğle', 'İkindi', 'Akşam', 'Yatsı'].map((vakit) {
+                            final isEnabled = _vakitBildirimleriEnabled[vakit] ?? true;
+                            final mins = (_vakitHatirlatmaDakikalari[vakit] ?? 15.0).round();
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isEnabled
+                                      ? theme.primary.withValues(alpha: 0.35)
+                                      : Colors.grey.withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            isEnabled ? Icons.notifications_active : Icons.notifications_off,
+                                            size: 20,
+                                            color: isEnabled ? theme.primary : Colors.grey,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            "$vakit Vakti",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                              color: isDark ? theme.textDark : theme.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Switch.adaptive(
+                                        value: isEnabled,
+                                        activeThumbColor: theme.primary,
+                                        onChanged: (val) async {
+                                          setModalState(() => _vakitBildirimleriEnabled[vakit] = val);
+                                          setState(() => _vakitBildirimleriEnabled[vakit] = val);
+                                          await _kaydetTumAyarlar();
+                                          await _zamanlaTumBildirimleri();
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                  if (isEnabled) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "Hatırlatma: $mins dk önce",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: isDark ? theme.textDark.withValues(alpha: 0.8) : theme.primary.withValues(alpha: 0.85),
+                                      ),
+                                    ),
+                                    Slider(
+                                      value: _vakitHatirlatmaDakikalari[vakit] ?? 15.0,
+                                      min: 5,
+                                      max: 60,
+                                      divisions: 11,
+                                      label: '$mins dk',
+                                      activeColor: theme.primary,
+                                      onChanged: (val) {
+                                        setModalState(() => _vakitHatirlatmaDakikalari[vakit] = val);
+                                        setState(() => _vakitHatirlatmaDakikalari[vakit] = val);
+                                      },
+                                      onChangeEnd: (val) async {
+                                        await _kaydetTumAyarlar();
+                                        await _zamanlaTumBildirimleri();
+                                      },
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }),
                         ],
                         const Divider(),
                         SwitchListTile.adaptive(

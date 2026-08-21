@@ -10,7 +10,9 @@ class PrayerNotificationService {
   Future<void> scheduleToday({
     required Map<String, String> timings,
     required bool enabled,
-    required int minutesBefore,
+    int minutesBefore = 15,
+    Map<String, bool>? perPrayerEnabled,
+    Map<String, int>? perPrayerMinutesBefore,
   }) async {
     for (var id = 1000; id < 1060; id++) {
       await _plugin.cancel(id);
@@ -20,6 +22,11 @@ class PrayerNotificationService {
     final now = tz.TZDateTime.now(tz.local);
     for (var index = 0; index < _prayers.length; index++) {
       final name = _prayers[index];
+
+      // Check if notification is enabled for this specific prayer
+      final isPrayerEnabled = perPrayerEnabled?[name] ?? true;
+      if (!isPrayerEnabled) continue;
+
       var time = _parseToday(timings[name], now);
       if (time == null) continue;
 
@@ -37,16 +44,17 @@ class PrayerNotificationService {
       );
 
       // 2. Vakit Öncesi Uyarı Bildirimi (Kilit Ekranı & Tam Ekran)
-      if (minutesBefore > 0) {
-        var reminderTime = time.subtract(Duration(minutes: minutesBefore));
+      final prayerMinutes = perPrayerMinutesBefore?[name] ?? minutesBefore;
+      if (prayerMinutes > 0) {
+        var reminderTime = time.subtract(Duration(minutes: prayerMinutes));
         if (reminderTime.isBefore(now)) {
           reminderTime = reminderTime.add(const Duration(days: 1));
         }
         await _schedule(
           id: 1020 + index,
           at: reminderTime,
-          title: '🔔 $name Vaktine $minutesBefore Dakika Kaldı',
-          body: 'Ezan okunmasına $minutesBefore dakika kaldı. Abdestinizi alıp hazırlanabilirsiniz.',
+          title: '🔔 $name Vaktine $prayerMinutes Dakika Kaldı',
+          body: 'Ezan okunmasına $prayerMinutes dakika kaldı. Abdestinizi alıp hazırlanabilirsiniz.',
         );
       }
     }
