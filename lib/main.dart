@@ -14,9 +14,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
+import 'dart:math';
 import 'package:share_plus/share_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'core/home_widget_service.dart';
 import 'core/prayer_notification_service.dart';
 import 'core/prayer_times_service.dart';
@@ -2656,18 +2658,92 @@ class KibleWebView extends StatefulWidget {
 }
 
 class _KibleWebViewState extends State<KibleWebView> {
+  int _secilenMod = 0; // 0: Sade GPS Pusulası, 1: Canlı Harita
   WebViewController? _controller;
-  bool _isLoading = true;
+  bool _isLoadingMap = true;
+
+  // GPS & Compass State
+  double _userLat = 41.0082; // Default İstanbul
+  double _userLng = 28.9784;
+  double _kibleAcisi = 154.0;
+  bool _gpsLoaded = false;
+
+  StreamSubscription<CompassEvent>? _compassSub;
+  double? _heading;
+  bool _hapticDone = false;
 
   @override
   void initState() {
     super.initState();
+    _konumAlVeKibleHesapla();
+    _pusulaDinle();
     _initWebview('https://qiblafinder.withgoogle.com/');
+  }
+
+  @override
+  void dispose() {
+    _compassSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _konumAlVeKibleHesapla() async {
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.whileInUse || perm == LocationPermission.always) {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+        );
+        _userLat = pos.latitude;
+        _userLng = pos.longitude;
+        _gpsLoaded = true;
+      }
+    } catch (_) {}
+
+    _kibleAcisi = _hesaplaKibleAcisi(_userLat, _userLng);
+    if (mounted) setState(() {});
+  }
+
+  double _hesaplaKibleAcisi(double lat, double lng) {
+    const kaabaLat = 21.422487 * (pi / 180);
+    const kaabaLng = 39.826206 * (pi / 180);
+    final userLatRad = lat * (pi / 180);
+    final userLngRad = lng * (pi / 180);
+    final dLng = kaabaLng - userLngRad;
+    final y = sin(dLng);
+    final x = cos(userLatRad) * tan(kaabaLat) - sin(userLatRad) * cos(dLng);
+    double qibla = atan2(y, x) * (180 / pi);
+    return (qibla + 360) % 360;
+  }
+
+  void _pusulaDinle() {
+    _compassSub = FlutterCompass.events?.listen((event) {
+      if (!mounted) return;
+      final heading = event.heading;
+      if (heading != null) {
+        setState(() {
+          _heading = (heading + 360) % 360;
+        });
+
+        // Check if aligned to Qibla (within 4 degrees)
+        final diff = ((_heading! - _kibleAcisi).abs()) % 360;
+        if (diff <= 4 || diff >= 356) {
+          if (!_hapticDone) {
+            HapticFeedback.mediumImpact();
+            _hapticDone = true;
+          }
+        } else {
+          _hapticDone = false;
+        }
+      }
+    });
   }
 
   void _initWebview(String url) {
     if (!kIsWeb) {
-      setState(() => _isLoading = true);
+      setState(() => _isLoadingMap = true);
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setBackgroundColor(
@@ -2675,7 +2751,7 @@ class _KibleWebViewState extends State<KibleWebView> {
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageFinished: (finishedUrl) {
-              if (mounted) setState(() => _isLoading = false);
+              if (mounted) setState(() => _isLoadingMap = false);
             },
           ),
         )
@@ -2686,15 +2762,321 @@ class _KibleWebViewState extends State<KibleWebView> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.themeData;
+    final isDark = widget.isDark;
 
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+
+        // ÜST MOD SEÇİCİ (TOGGLE BUTTONS)
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _secilenMod = 0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _secilenMod == 0 ? theme.primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.explore_rounded,
+                            size: 18,
+                            color: _secilenMod == 0 ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            "🧭 Sade GPS Pusulası",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: _secilenMod == 0 ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _secilenMod = 1),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _secilenMod == 1 ? theme.primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.map_rounded,
+                            size: 18,
+                            color: _secilenMod == 1 ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            "🗺️ Canlı Harita",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: _secilenMod == 1 ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 6),
+
+        // İÇERİK EKRANI
+        Expanded(
+          child: IndexedStack(
+            index: _secilenMod,
+            children: [
+              // MOD 0: SADE GPS PUSULASI
+              _buildSadeGpsPusulasi(theme, isDark),
+
+              // MOD 1: CANLI HARİTA WEBVIEW
+              _buildHaritaWebView(theme),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSadeGpsPusulasi(AppThemeData theme, bool isDark) {
+    final heading = _heading ?? 0.0;
+    final kibleYonuAcisi = (_kibleAcisi - heading + 360) % 360;
+    final diff = ((heading - _kibleAcisi).abs()) % 360;
+    final isAligned = diff <= 4 || diff >= 356;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+
+          // PUSULA BAŞLIK & DERECE BİLGİ KARTI
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: isAligned
+                  ? Colors.green.shade800.withValues(alpha: 0.2)
+                  : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.04)),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isAligned ? Colors.green.shade700 : theme.primary.withValues(alpha: 0.3),
+                width: isAligned ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isAligned ? "🕌 KIBLEYE TAM HİZALANDINIZ!" : "📍 Kıble Yönü Aranıyor...",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isAligned ? Colors.green.shade700 : (isDark ? theme.textDark : theme.primary),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _gpsLoaded ? "GPS İle Konum Doğrulandı" : "Hesaplanan Kıble Açısı",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: theme.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    "${_kibleAcisi.round()}°",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 30),
+
+          // CANLI DÖNEN PUSULA KADRANI
+          SizedBox(
+            width: 260,
+            height: 260,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // DIŞ PUSULA KADRANI (KUZEYE DÖNEN HALKA)
+                Transform.rotate(
+                  angle: -heading * (pi / 180),
+                  child: Container(
+                    width: 250,
+                    height: 250,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDark ? Colors.white.withValues(alpha: 0.05) : theme.primary.withValues(alpha: 0.08),
+                      border: Border.all(
+                        color: isAligned ? Colors.green.shade700 : theme.primary.withValues(alpha: 0.4),
+                        width: 4,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isAligned ? Colors.green.shade700 : theme.primary).withValues(alpha: 0.15),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // KUZEY HARFİ (N)
+                        Positioned(
+                          top: 10,
+                          child: Text("K (N)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 16)),
+                        ),
+                        // GÜNEY (S)
+                        Positioned(
+                          bottom: 10,
+                          child: Text("G (S)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+                        ),
+                        // DOĞU (E)
+                        Positioned(
+                          right: 12,
+                          child: Text("D (E)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+                        ),
+                        // BATI (W)
+                        Positioned(
+                          left: 12,
+                          child: Text("B (W)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // İÇ KABE KIBLE İĞNESİ (KIBLE YÖNÜNE İŞARET EDEN YEŞİL İĞNE)
+                Transform.rotate(
+                  angle: kibleYonuAcisi * (pi / 180),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isAligned ? Colors.green.shade700 : theme.primary,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: (isAligned ? Colors.green.shade700 : theme.primary).withValues(alpha: 0.5),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.navigation_rounded, size: 40, color: Colors.white),
+                      ),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+
+                // MERKEZ KABE İKONU
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: isDark ? theme.cardDark : theme.cardLight,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: theme.primary, width: 2),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      "🕋",
+                      style: TextStyle(fontSize: 22),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 25),
+
+          // PUSULA REHBERİ BİLGİ NOTU
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded, size: 18, color: theme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Telefonunuzu düz tutarak yeşil ok Kabe simgesiyle hizalanana kadar döndürün.",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHaritaWebView(AppThemeData theme) {
     if (kIsWeb || _controller == null) {
-      return const Center(child: Text("Kıble Bulucu ekranı"));
+      return const Center(child: Text("Kıble Haritası yükleniyor..."));
     }
 
     return Stack(
       children: [
         WebViewWidget(controller: _controller!),
-        if (_isLoading)
+        if (_isLoadingMap)
           Center(child: CircularProgressIndicator(color: theme.primary)),
       ],
     );

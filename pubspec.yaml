@@ -1,7 +1,7 @@
 name: ezan_vakti
 description: "Ezan Vakti Uygulaması"
 publish_to: "none"
-version: 3.5.3+12
+version: 3.5.4+13
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -21,6 +21,7 @@ dependencies:
   adhan_dart: ^2.0.1
   geolocator: ^13.0.0
   geocoding: ^3.0.0
+  flutter_compass: ^0.8.0
 
 dev_dependencies:
   flutter_test:
