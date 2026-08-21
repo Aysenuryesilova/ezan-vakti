@@ -2686,6 +2686,7 @@ class _KibleWebViewState extends State<KibleWebView> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.themeData;
+    final isDark = widget.isDark;
 
     if (kIsWeb || _controller == null) {
       return const Center(child: Text("Kıble Bulucu ekranı"));
@@ -2696,6 +2697,71 @@ class _KibleWebViewState extends State<KibleWebView> {
         WebViewWidget(controller: _controller!),
         if (_isLoading)
           Center(child: CircularProgressIndicator(color: theme.primary)),
+
+        // ÜST REHBER BİLGİ KARTI (KUSURSUZ ÇATİ HİZALAMASI)
+        Positioned(
+          top: 10,
+          left: 12,
+          right: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.90),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                )
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.shade700.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.verified_rounded, color: Colors.teal.shade700, size: 22),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "🕋 KUSURSUZ EV & ÇATI KIBLE HİZALAMASI",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? theme.textDark : theme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Kendi evinizin çatısına bakıp yeşil kıble çizgisini gözünüzle %100 doğrulayın.",
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  color: theme.primary,
+                  onPressed: () {
+                    _controller?.reload();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -3544,6 +3610,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
   void _sehirVeIlceSecimiDiyalog() {
     String tempIl = secilenSehir;
     String tempIlce = secilenIlce;
+    String aramaFiltresi = '';
 
     showDialog(
       context: context,
@@ -3558,23 +3625,38 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
             final theme = AppThemeData.getTheme(widget.currentTheme);
             final isDark = widget.isDarkMode;
 
+            final filtrelenmisIller = TurkiyeSehirler.iller.where((il) {
+              return il.toLowerCase().contains(aramaFiltresi.toLowerCase());
+            }).toList();
+
             return AlertDialog(
               backgroundColor: isDark ? theme.cardDark : theme.cardLight,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: Text(
-                "81 İl & İlçe Yönetimi 📍",
-                style:
-                    TextStyle(color: isDark ? theme.textDark : theme.primary),
+                "Konum Seçimi & 81 İl Yönetimi 📍",
+                style: TextStyle(
+                  color: isDark ? theme.textDark : theme.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // SEÇENEK 1: OTOMATİK BUL (GPS)
+                    Text("1️⃣ SEÇENEK 1: OTOMATİK KONUM (GPS)",
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: theme.primary)),
+                    const SizedBox(height: 6),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.teal.shade700,
                         foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(42),
+                        minimumSize: const Size.fromHeight(44),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -3582,25 +3664,69 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                       icon: const Icon(Icons.my_location_rounded),
                       label: const Text("📍 Otomatik Konumumu Bul (GPS)",
                           style: TextStyle(fontWeight: FontWeight.bold)),
-                      onPressed: () => _konumumuOtomatikBul(setDiyalogState),
+                      onPressed: () async {
+                        await _konumumuOtomatikBul(setDiyalogState);
+                        if (context.mounted) Navigator.pop(context);
+                      },
                     ),
-                    const SizedBox(height: 12),
-                    Text("İl Seçin (81 İl):",
+
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(),
+                    ),
+
+                    // SEÇENEK 2: MANUEL SEÇ (CANLI ARAMA ÇUBUĞU)
+                    Text("2️⃣ SEÇENEK 2: MANUEL İL / İLÇE SEÇ",
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: theme.primary)),
+                    const SizedBox(height: 8),
+
+                    // Canlı Arama Çubuğu
+                    TextField(
+                      onChanged: (val) {
+                        setDiyalogState(() {
+                          aramaFiltresi = val;
+                          if (filtrelenmisIller.isNotEmpty && !filtrelenmisIller.contains(tempIl)) {
+                            tempIl = filtrelenmisIller.first;
+                            tempIlce = TurkiyeSehirler.getIlceler(tempIl).first;
+                          }
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: "Şehir ara (Örn: İstanbul, Malatya)...",
+                        hintStyle: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.white54 : Colors.black45),
+                        prefixIcon: Icon(Icons.search_rounded, color: theme.primary),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: theme.primary),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    Text("İl Seçin:",
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: isDark ? theme.textDark : theme.primary)),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     DropdownButton<String>(
                       isExpanded: true,
-                      value: tempIl,
+                      value: filtrelenmisIller.contains(tempIl)
+                          ? tempIl
+                          : (filtrelenmisIller.isNotEmpty ? filtrelenmisIller.first : tempIl),
                       dropdownColor: isDark ? theme.cardDark : theme.cardLight,
-                      items: TurkiyeSehirler.iller.map((il) {
+                      items: (filtrelenmisIller.isEmpty ? TurkiyeSehirler.iller : filtrelenmisIller).map((il) {
                         return DropdownMenuItem(
                           value: il,
                           child: Text(il,
                               style: TextStyle(
-                                  color:
-                                      isDark ? theme.textDark : theme.primary)),
+                                  color: isDark ? theme.textDark : theme.primary)),
                         );
                       }).toList(),
                       onChanged: (val) {
@@ -3617,7 +3743,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: isDark ? theme.textDark : theme.primary)),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     DropdownButton<String>(
                       isExpanded: true,
                       value: tempIlce,
@@ -3627,8 +3753,7 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                           value: ilce,
                           child: Text(ilce,
                               style: TextStyle(
-                                  color:
-                                      isDark ? theme.textDark : theme.primary)),
+                                  color: isDark ? theme.textDark : theme.primary)),
                         );
                       }).toList(),
                       onChanged: (val) {
@@ -3639,14 +3764,18 @@ class _EzanVaktiAppState extends State<EzanVaktiApp> {
                         }
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.primary,
                         foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(42),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      icon: const Icon(Icons.push_pin),
-                      label: const Text("Bu Konumu Sabitle (Ana Şehir)"),
+                      icon: const Icon(Icons.push_pin_rounded),
+                      label: const Text("Bu Konumu Sabitle (Kaydet)", style: TextStyle(fontWeight: FontWeight.bold)),
                       onPressed: () {
                         setState(() {
                           secilenSehir = tempIl;
